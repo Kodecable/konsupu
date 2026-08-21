@@ -1,0 +1,12 @@
+build
+run
+release/output
+release/work
+.codex
+.vscode
+*.autosave
+.DS_Store
+.directory
+.*.swp
+__debug_bin*
+__pycache__
