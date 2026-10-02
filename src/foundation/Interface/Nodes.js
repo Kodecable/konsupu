@@ -22,6 +22,8 @@ export {
 export const InputContract = {
   input: "Node[]; each actual Node occurs exactly once",
   order: "Node data references point to earlier occurrences",
+  crossing:
+    "A Variable, or a Node whose declaration reaches one, is used directly only in its own Situation and the refinements below; elsewhere ref the Variable. Any other Node may be referenced from every Situation",
   situations: "situated is parent/owner; roots form a forest",
   mention: "Every Situation except the initial one needs semantic mention",
   query:

@@ -1,8 +1,9 @@
 import { Situation } from "./Situation.js";
+import { Variable } from "./Variable.js";
 import { GlobalNode } from "./GlobalNode.js";
-import { RefMeta, RefTarget } from "./RefMeta.js";
+import { NamedGlobal, RefMeta, RefTarget } from "./RefMeta.js";
 import { RecordBinding } from "./Bindings.js";
-import { ReportDataMembers } from "./DataGraph.js";
+import { DataMembers, ReportDataMembers, WalkReferences } from "./DataGraph.js";
 import { IsAncestor } from "./SituationTree.js";
 import { Require } from "./InputStructureError.js";
 // Scan one occurrence. Two sources of references meet here and are kept apart:
@@ -43,6 +44,13 @@ export function IndexMentions(plan) {
 }
 // A ref is recorded, not validated: ValidateRefs owns every ref rule, including
 // the order of its source and root.
+//
+// Only Situation-relative state needs ref to cross Situations. A Variable's
+// value depends on the Situation it is read from, and so does every Node whose
+// declaration reaches a Variable; such a reference may be used directly only
+// within the Situation it belongs to and the refinements below it. A Node whose
+// declaration reaches no Variable is the same object seen from anywhere, so
+// mentioning it from another Situation is not an information flow.
 function CheckReference(plan, node, reference) {
   if (RefMeta(reference) !== null) return;
   Require(!(reference instanceof GlobalNode), "Use GlobalNode.Ref()");
@@ -52,8 +60,40 @@ function CheckReference(plan, node, reference) {
     "Node references must point to preceding occurrences",
   );
   if (reference instanceof Situation) return;
+  if (IsAncestor(reference.situated, node.situated)) return;
   Require(
-    IsAncestor(reference.situated, node.situated),
-    "Cross-Situation cognition requires ref",
+    !(reference instanceof Variable),
+    "Cross-Situation Variable requires ref",
   );
+  Require(
+    !CarriesVariable(plan, reference),
+    "Cross-Situation Node must not carry a Variable; ref the Variable instead",
+  );
+}
+// Whether a Node's declaration reaches Situation-relative state: a Variable or
+// a ref anywhere in its data members, through plain containers and the Nodes
+// they reach. A reference naming a global itself, and a Situation, read the
+// same from every Situation. The scan runs in Input order and every Node
+// reference points to an earlier occurrence that was already scanned, so the
+// walk over Nodes is acyclic and one answer per Node serves the whole scan.
+function CarriesVariable(plan, node) {
+  const known = plan.carriesVariable.get(node);
+  if (known !== void 0) return known;
+  let carries = false;
+  for (const [field, value] of DataMembers(node)) {
+    if (field === "situated") continue;
+    WalkReferences(value, (reference) => {
+      if (carries) return;
+      if (RefMeta(reference) !== null) {
+        carries = NamedGlobal(reference) === null;
+      } else if (reference instanceof Variable) {
+        carries = true;
+      } else if (!(reference instanceof Situation)) {
+        carries = CarriesVariable(plan, reference);
+      }
+    });
+    if (carries) break;
+  }
+  plan.carriesVariable.set(node, carries);
+  return carries;
 }

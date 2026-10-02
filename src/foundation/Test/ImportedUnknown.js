@@ -49,7 +49,7 @@ export function TestImportedUnknown() {
   RejectWith(
     () =>
       Analyze([...input, new Query(destination, [imported.result().nested])]),
-    "Cross-Situation cognition requires ref",
+    "Cross-Situation Variable requires ref",
   );
   // The nested Variable may acquire a source of its own; it still cannot be
   // listed through the ref, because only ref(...) itself is a Query item.

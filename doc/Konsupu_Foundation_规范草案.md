@@ -58,7 +58,18 @@ Situation 的 exports 记录它显式 Query 的项。这些项分两类：直接
 
 持有 `ref` 返回值的认知可以从自己的直接子 Situation、或与自己没有共同祖先的 Situation 取值。同一树的兄弟、堂兄弟和非直接子代之间必须逐层 `ref`。子 Situation 可以直接使用祖先认知，不需要 ref。
 
-ref 用于显式表现信息流，不是隔离、授权或 ACL。
+ref 用于显式表现信息流，即 Situation 相对状态的流动；它不是隔离、授权或 ACL。
+
+**哪些引用需要 ref。** 只有带 Situation 相对状态的引用需要 ref。Variable 的 value 与求解状态相对于 Situation（1.3）：从不同 Situation 读取同一个 Variable，可能落在不同值槽，所以跨 Situation 使用它必须显式表现来源。一个 Node 的声明图若能到达 Variable，它就同样带有这种状态：从不同 Situation 读取其中的 Variable，结果可能不同。声明图到达不了任何 Variable 的 Node（下称常量 Node）则从任何 Situation 看都是同一个对象、具有同一组语义字段，提及它不构成信息流。因此：
+
+- 裸 Variable 只能被它所在 Situation 及其后代中的认知直接引用；在其他位置使用必须通过 `ref`。
+- 声明图到达 Variable 的 Node 同样只能被它所在 Situation 及其后代中的认知直接引用；在其他位置需要其中的值时，对相应 Variable 使用 `ref`，不整体提及该 Node。
+- 常量 Node 可以被任何 Situation 中的认知直接引用，只受 1.1 的引用顺序约束。
+- Situation 本身可以被任何认知引用，同样受引用顺序约束；这是提及其他 Situation 的通道。
+
+声明图指 Node 的语义数据成员（`situated` 除外）经普通 object／Array／Map／Set 容器与其中的 Node 递归可达的全部对象。其中的 `ref` 返回值算作到达 Variable；指向 global 本身的引用与 Situation 不算，它们从任何 Situation 看都相同。该判据是保守的：即使可达的 Variable 从两边看恰好落在同一值槽，也按到达 Variable 处理，因为精确判定依赖整个 Input 的 Query 分布。
+
+跨 Situation 直接提及常量 Node 只是提及：被提及对象的 `situated` 不变，提及者不因此继承该对象所在 Situation 的认知，反查的可见性仍按提及者所在 Situation 判定。
 
 `ref` 的返回值不具有独立语义身份、Input 位置或 effect；两次 ref 不要求 `===`。它提供属性读取与方法调用，但访问只是便利手段：Foundation 的类型判断、结构检查、来源判定、值读取与反查都单独识别 ref，不通过该返回值与它指向对象之间的访问行为来实现。读取成员时，非 Variable 成员原样返回；成员是裸 Variable 时，返回一个同 source 的扁平临时引用，使后续读取落在正确的值槽。方法结果与容器原样返回，嵌在其中的 Variable 是裸的，需要来源时必须显式使用 `ref`。ref 是只读视图：写入、删除与属性定义一律拒绝，不转发给目标对象，元数据 Symbol 也不例外。
 
@@ -135,7 +146,7 @@ VariableEffect {
 }
 ```
 
-value 可以是任意 JSValue，包括 Node 与 `ref` 的返回值，但不能是裸 Variable。赋值点只检查 value 顶层：顶层是裸 Variable 时抛 `TypeError`，属领域实现错误，不是输入构造错误。嵌套在 value 内部的裸 Variable 同样禁止，但只作为约定，不检查，因为逐次遍历整个值图代价过高。运行期自建的 ref 在赋值点检查：sourceSituation 在本轮 Input 内、被导入项是 Variable、sourceSituation 自己显式 Query 过它；违反同样是领域错误。
+value 可以是任意 JSValue，包括 Node 与 `ref` 的返回值，但不能是裸 Variable。赋值点只检查 value 顶层：顶层是裸 Variable 时抛 `TypeError`，属领域实现错误，不是输入构造错误。嵌套在 value 内部的裸 Variable 同样禁止，但只作为约定，不检查，因为逐次遍历整个值图代价过高。value 是声明图到达 Variable 的 Node 时，其中的 Variable 按读取视角解析（3.7）；若该 Node 所在 Situation 不是读取视角的祖先（含自身），读取会静默落在读取视角的值槽，而不是该 Node 所在 Situation 的值槽。因此这样的 Node 作为 value 时，只应在其所在 Situation 及其后代中被读取，需要跨 Situation 传递其中的值时，对相应 Variable 使用 `ref`（与 1.4 的结构规则对应）；这同样是约定，不检查。运行期自建的 ref 在赋值点检查：sourceSituation 在本轮 Input 内、被导入项是 Variable、sourceSituation 自己显式 Query 过它；违反同样是领域错误。
 
 该 effect 只表示实际求值结果，不包含 structural resolvedness、source、inherited 或 explicit-export 字段。
 
@@ -263,7 +274,7 @@ Map<Situation, Map<Variable, VariableEffect>>
 
 ### 3.2 Structural Pass
 
-按 Input 线性顺序建立本次 Resolve 的结构状态，检查 Node 唯一性与引用顺序、Situation 森林及显式提及、Query 声明（global 不得出现、从 `ref` 的返回值上读取成员而得到的 Variable 不得出现）、Query 重复项（解析到同一值槽的多余项忽略，解析到不同值槽即报错）、继承来源、ref 流向（sourceSituation 的 exports 含 variable、方向合法、使用点在其后），并建立提及索引（Input Node 与 global 两类）。引用顺序、跨 Situation 必须使用 ref 以及 ref 流向这些结构规则，作用于每个 occurrence 全部语义数据成员中的引用，不依赖类型的提及声明；提及索引与 Situation 的显式提及只由提及声明建立。
+按 Input 线性顺序建立本次 Resolve 的结构状态，检查 Node 唯一性与引用顺序、跨 Situation 引用（1.4）、Situation 森林及显式提及、Query 声明（global 不得出现、从 `ref` 的返回值上读取成员而得到的 Variable 不得出现）、Query 重复项（解析到同一值槽的多余项忽略，解析到不同值槽即报错）、继承来源、ref 流向（sourceSituation 的 exports 含 variable、方向合法、使用点在其后），并建立提及索引（Input Node 与 global 两类）。引用顺序、跨 Situation 引用规则（裸 Variable 与声明图到达 Variable 的 Node 在其所在 Situation 及后代之外必须使用 ref）以及 ref 流向这些结构规则，作用于每个 occurrence 全部语义数据成员中的引用，不依赖类型的提及声明；提及索引与 Situation 的显式提及只由提及声明建立。
 
 本 pass 不执行领域求值。它以一次完整 Input 扫描确定每个引用的 structural resolvedness，该判定与引用所在位置无关：结构分析本身是全量的，不存在把最终状态「反套」到此前位置的问题。受执行顺序约束的只有实际 value 的写入。
 
@@ -398,6 +409,6 @@ resolved 必须是 remaining 的非空子集；outputs 可以为空，但每项�
 
 ### B. 验证范围
 
-`src/foundation/Test.js` 自检覆盖类型、结构、来源、ref 与信息流、值读取、提及反查与 global 身份、求解循环与祈使循环；`konsupurt` 的 Go 集成测试在真实 QuickJS Runtime 中验证 Input → Resolve → Output 的跨 Context 传递、失败分类与部分赋值回滚。统一由仓库根目录的 `./xmake.agents test` 运行。
+`src/foundation/Test.js` 自检覆盖类型、结构、跨 Situation 引用、来源、ref 与信息流、值读取、提及反查与 global 身份、求解循环与祈使循环；`konsupurt` 的 Go 集成测试在真实 QuickJS Runtime 中验证 Input → Resolve → Output 的跨 Context 传递、失败分类与部分赋值回滚。统一由仓库根目录的 `./xmake.agents test` 运行。
 
 这不是对所有自然语言场景的证明；未覆盖范围见《Konsupu Foundation 使用说明》与《规范备忘》。

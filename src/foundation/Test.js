@@ -16,6 +16,7 @@ import {
 import { TestBindings } from "./Test/Bindings.js";
 import { TestListings } from "./Test/Listings.js";
 import { TestMentions } from "./Test/Mentions.js";
+import { TestCrossing } from "./Test/Crossing.js";
 import { TestReadable } from "./Test/Readable.js";
 import { TestGlobalMemberIdentity } from "./Test/GlobalIdentity.js";
 import { Evaluate } from "./Memory/Foundation/Evaluate.js";
@@ -46,6 +47,7 @@ export function Test() {
   TestBindings();
   TestListings();
   TestMentions();
+  TestCrossing();
   TestReadable();
   TestGlobalMemberIdentity();
   TestFixtureEvaluation();

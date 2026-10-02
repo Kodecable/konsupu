@@ -199,7 +199,7 @@ object／Array／Map／Set 容器仍算自身。基类实现是抽象的，漏�
 （指定字段）是两个现成助手；`situated` 是父链接，不参与汇报。
 
 汇报只决定提及：反查索引与「Situation 必须被提及」只看汇报。结构检验
-（引用顺序、跨 Situation 必须 ref、ref 合法性）由 `Analyze` 自己遍历每个
+（引用顺序、跨 Situation 引用规则、ref 合法性）由 `Analyze` 自己遍历每个
 occurrence 的全部数据成员完成，不依赖汇报；汇报的项也按同样规则检验。
 因此少报只会让反查漏掉该提及，不会让非法结构通过。
 
@@ -338,6 +338,30 @@ Node，元数据 Symbol 也不例外；Resolve 期间不修改 Declaration（包
 
 从 `ref` 的返回值上读取成员而得到的其他 Variable 不在当前 Situation 的 exports 中，不得出现在 variables 中；它们只能作为提及，即便它们本身另有来源。没有值来源的 Variable 不可读取，属输入构造错误。
 
+### 哪些引用需要 ref
+
+只有带 Situation 相对状态的引用需要 ref（草案 1.4、备忘第 15 节）：
+
+| 被引用者 | 在其所在 Situation 及后代中 | 在其他位置 |
+|---|---|---|
+| 裸 Variable | 直接引用 | 必须 `ref`，否则 `Cross-Situation Variable requires ref` |
+| 声明图到达 Variable 的 Node | 直接引用 | 不得直接引用，否则 `Cross-Situation Node must not carry a Variable`；对其中的 Variable 使用 `ref` |
+| 常量 Node（声明图不到达 Variable） | 直接引用 | 直接引用 |
+| Situation | 直接引用 | 直接引用 |
+
+声明图是 `situated` 以外的语义数据成员经普通容器与其中的 Node 递归可达的
+全部对象；其中的 `ref` 返回值算作到达 Variable，指向 global 本身的引用与
+Situation 不算。所有引用仍须指向更早的 occurrence。
+
+因此，两个互不细化的 Situation（例如叙述的世界与角色的信念）可以直接提及
+同一个常量对象，不需要为它另建共同祖先。直接提及只是提及：对象的
+`situated` 不变，提及者不继承对象所在 Situation 的认知，`Bindings` 的可见性
+仍按提及者所在 Situation 的祖先链判定。
+
+值层面有对应的约定：声明图到达 Variable 的 Node 作为 value 时，只应在其所在
+Situation 及其后代中被读取。从其他 Situation 读取其中的 Variable，会静默落在
+读取视角的值槽。这一约定不检查。
+
 ## 临时 Runtime 适配
 
 - `internal/interaction/resolve.go` 的 `requireResolvePersistence` 常量
@@ -349,7 +373,7 @@ Node，元数据 Symbol 也不例外；Resolve 期间不修改 Declaration（包
 
 ## 验证与单轮问答夹具
 
-`Test.js` 自检覆盖类型、字段、结构、来源、ref 与信息流、Query 项的重复与歧义、提及与结构检验的分离、值读取与可读性探测、反查与 global 身份、
+`Test.js` 自检覆盖类型、字段、结构、跨 Situation 引用、来源、ref 与信息流、Query 项的重复与歧义、提及与结构检验的分离、值读取与可读性探测、反查与 global 身份、
 unresolved 导入限制、多层转出、进展校验与空输出。它调用普通认知模块；
 不直接导入使用 `konsupu:input` 的根 `Resolve.js`，因为 Test Context
 不提供该 Host 能力。

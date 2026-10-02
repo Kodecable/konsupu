@@ -17,7 +17,7 @@ export function TestMentions() {
   const hidden = new Variable(a);
   RejectWith(
     () => Analyze([root, a, b, scene, hidden, new Quiet(b, { hidden })]),
-    "Cross-Situation cognition requires ref",
+    "Cross-Situation Variable requires ref",
   );
   const later = new Variable(root);
   RejectWith(

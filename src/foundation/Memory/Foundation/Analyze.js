@@ -20,6 +20,7 @@ export function Analyze(input) {
     bindings: /* @__PURE__ */ new Map(),
     globalBindings: /* @__PURE__ */ new Map(),
     mentions: [],
+    carriesVariable: /* @__PURE__ */ new Map(),
     exports: /* @__PURE__ */ new Map(),
     listings: [],
     queries: [],

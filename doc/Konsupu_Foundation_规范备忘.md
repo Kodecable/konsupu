@@ -81,7 +81,7 @@ Query 或 Imperative 已经提供求解视角；不要求领域调用者为选�
 
 本节替代此前“方法返回的对象图中的 Variable 也必须转成 ref”的约定。ref 的元数据是一条扁平记录，不是链：`ref(child, ref(leaf, v))` 在构造时就压平为 `ref(child, v)`，中继路径由沿途 Query 的 export 记录承载，不记录在 ref 上。
 
-从 `ref` 的返回值上读取成员：非 Variable 成员原样返回；成员是裸 Variable 时，当场生成一个同 source 的扁平临时引用（记录它是从哪个 Variable 上读出的），之后读取它会落在该视角下正确的值槽。方法可以调用，`this` 是该返回值本身，结果原样返回；数组、Map、Set 等容器也原样返回。因此嵌在方法结果或容器内部的 Variable 是裸的：值要与来源一起流转时，必须显式写 `ref(source, variable)`，不能用成员访问替代。value 本身是 Node 时，它语义字段里的 Variable 属于该 Node 的声明结构，不算嵌套在值里的裸 Variable（对照第 14 节的顶层禁令），读取时得到裸 Variable，按本节处理。
+从 `ref` 的返回值上读取成员：非 Variable 成员原样返回；成员是裸 Variable 时，当场生成一个同 source 的扁平临时引用（记录它是从哪个 Variable 上读出的），之后读取它会落在该视角下正确的值槽。方法可以调用，`this` 是该返回值本身，结果原样返回；数组、Map、Set 等容器也原样返回。因此嵌在方法结果或容器内部的 Variable 是裸的：值要与来源一起流转时，必须显式写 `ref(source, variable)`，不能用成员访问替代。value 本身是 Node 时，它语义字段里的 Variable 属于该 Node 的声明结构，不算嵌套在值里的裸 Variable（对照第 14 节的顶层禁令），读取时得到裸 Variable，按本节处理；该 Node 所在 Situation 不是读取视角的祖先时的约定见第 15 节。
 
 `ref` 的返回值是只读视图：写入、删除与属性定义一律拒绝，不转发给被引用的 Node，元数据 Symbol 也不例外。
 
@@ -184,14 +184,43 @@ Query Node 之间的执行顺序严格按 Input 顺序，不允许破坏结构�
 
 **Query 项的重复与歧义。** 同一 Situation 中（同一个或不同的 Query）多次列出同一对象（直接列出、经 `ref` 或两者兼有），若各项解析到同一个值槽 `(situated, variable)`，视为重复，只登记一次；若解析到不同的值槽，属输入构造错误。例如 `v` 与 `ref(child, v)`，或 `ref(a, v)` 与 `ref(b, v)`。判定按“若该项是这一作用域的记录，它代表哪个值槽”进行，与各项先后无关，不再由首个出现的项决定角色。实现为 `PlanQueries.js` 的 `CheckListings`，在 `ValidateRefs` 之后运行。
 
-**值中的裸 Variable 只检查顶层。** 赋值点只拒绝顶层裸 Variable；嵌套在值内部的裸 Variable 同样禁止，但只作约定，不检查，因为逐次遍历整个值图代价过高。例外：value 本身是 Node 时，它语义字段里的 Variable 属于声明结构，不算嵌套裸 Variable，读取时按第 6 节处理。
+**值中的裸 Variable 只检查顶层。** 赋值点只拒绝顶层裸 Variable；嵌套在值内部的裸 Variable 同样禁止，但只作约定，不检查，因为逐次遍历整个值图代价过高。例外：value 本身是 Node 时，它语义字段里的 Variable 属于声明结构，不算嵌套裸 Variable，读取时按第 6 节处理（该 Node 所在 Situation 不是读取视角的祖先时的约定见第 15 节）。
 
 **写入只作约定。** Resolve 期间不修改 Declaration（包括其字段中的普通容器）与已写入的 value，是约定而非强制。ref 是只读视图：写入、删除与属性定义一律拒绝，不转发给被引用的 Node（见第 6 节），元数据 Symbol 也不例外。
 
-**结构检验与提及分离。** 结构检验（引用顺序、跨 Situation 必须 ref、ref 合法性）由结构扫描自己遍历每个 occurrence 的全部语义数据成员完成，不依赖 `ReportReferences`。`ReportReferences` 只汇报自身 Declaration 中的直接提及：不经其他 Node 传递，但自身字段中的普通容器仍算自身。提及决定反查索引与“Situation 必须被提及”；汇报的项按同样的结构规则检验。保留“必须实现、漏写报错”：提及是语义声明，应当显式写出。
+**结构检验与提及分离。** 结构检验（引用顺序、跨 Situation 引用规则（第 15 节）、ref 合法性）由结构扫描自己遍历每个 occurrence 的全部语义数据成员完成，不依赖 `ReportReferences`。`ReportReferences` 只汇报自身 Declaration 中的直接提及：不经其他 Node 传递，但自身字段中的普通容器仍算自身。提及决定反查索引与“Situation 必须被提及”；汇报的项按同样的结构规则检验。保留“必须实现、漏写报错”：提及是语义声明，应当显式写出。
 
 **取值依赖由领域声明、Input Translation 满足。** Foundation 不分析 Variable 之间的取值依赖，也不调整 Query 顺序。视角提供 `Readable(term)`（`Value` 此刻能否成功，不抛错）与 `RequireValue(term, reason)`（失败时以领域原因报告输入构造错误）。领域在 Interface 注释中声明依赖；互相依赖的 Variable 放入同一个 Query。
 
 **需要假设的变量本来未知。** 子 Situation 是细化，祖先已 Query 的变量在所有后代中都是已知的。假设只针对祖先未 Query 的变量，例如兄弟 Situation 各自细化同一个未知量；对已知值的反事实设想使用新 Variable，它与原变量的关系由认知内容表达。祖先在任意位置 Query 了该变量时，子 Situation 的 Query 只登记 export，子 Situation 对它的约束静默失效；视角的 `ResolutionSituation(variable)` 给出值槽所在的 Situation，供领域发现并报告这种冲突。
 
 **领域类可保持 final。** `Interface/Nodes.js` 导出 `Final`，具体领域类在构造器中调用 `Final(Type, new.target)`。
+
+## 15. 本轮确认（2026-10-02）
+
+**跨 Situation 引用：只有 Situation 相对状态需要 ref。** 此前的结构规则要求一切非 Situation 引用在祖先链之外都使用 ref，而 ref 只能携带 Variable，于是 Variable 以外的 Node 实际上无法被祖先链之外的认知提及。这把“提及”与“信息流”混为一谈。ref 显式表现的信息流是 Situation 相对状态的流动：Variable 的值与求解状态相对于 Situation，跨 Situation 读取必须说清读的是哪个值槽。不含 Variable 的声明与 Situation 无关，从任何 Situation 看都相同，提及它不涉及任何值槽。旧规则的直接后果是：两个互不细化、却要提及同一对象的 Situation（例如叙述的世界与角色的信念），只能人为建立一个共同祖先来存放该对象；Node 放在哪里由谁提到它决定，而不是由它在哪里被引入决定。
+
+规则见草案 1.4，摘要如下：
+
+| 被引用者 | 在其所在 Situation 及后代中 | 在其他位置 |
+|---|---|---|
+| 裸 Variable | 直接引用 | 必须 `ref`（不变） |
+| 声明图到达 Variable 的 Node | 直接引用 | 不得直接引用；对其中的 Variable 使用 `ref` |
+| 常量 Node | 直接引用 | 直接引用 |
+| Situation | 直接引用 | 直接引用（不变） |
+
+声明图是 Node 的语义数据成员（`situated` 除外）经普通容器与其中的 Node 递归可达的全部对象。其中的 `ref` 返回值算作到达 Variable；指向 global 本身的引用与 Situation 不算。global 的 Variable 成员无论从哪里读取都按读取视角解析，与持有它的 Node 所在的 Situation 无关，因此提及 global 本身的 Node 仍是常量 Node。判据是保守的：精确条件（可达的 Variable 从两边看落在同一值槽）依赖整个 Input 的 Query 分布，不采用。
+
+以下不变：引用顺序与 Situation 必须被提及；ref 的方向规则、export 要求与 Query 列项规则；提及只是提及——被提及对象的 `situated` 不变，提及者不继承该对象所在 Situation 的认知，反查可见性仍按提及者所在 Situation 的祖先链判定（第 10 节）。
+
+**值层面的对应约定。** 值层面今天已经允许跨 Situation 的 Node，并且已经存在同样的问题。实测：根 R 下有兄弟 W、B；Variable `v` 在 R 中；B 中有命题 `P{entity: v}`；B 与 W 各自 Query `v` 并得到不同的值；把 P 作为 W 中某个 Variable 的值，再从 W 读取 `P.entity`，得到 W 的值，不报错。草案 2.4 因此把声明层面的判据写成值层面的约定：声明图到达 Variable 的 Node 作为 value 时，只应在其所在 Situation 及其后代中被读取。与嵌套裸 Variable 一样，只作约定，不检查。
+
+**实现。** `ScanContent.js` 的 `CheckReference`：被引用者不在引用者所在 Situation 的祖先链上时，Variable 以 `Cross-Situation Variable requires ref` 拒绝，声明图到达 Variable 的 Node 以 `Cross-Situation Node must not carry a Variable; ref the Variable instead` 拒绝，其余放行。到达判定 `CarriesVariable` 的结果按 Node 记录在本次分析中（`plan.carriesVariable`）：结构扫描按 Input 顺序进行，每个 Node 引用都指向已经扫描过的更早出现，Node 之间的遍历无环。自检位于 `Test/Crossing.js`。
+
+**Node 级 ref 暂不引入。** 曾考虑把 ref 推广到任意 Node（`ref(situation, node)`），使声明图到达 Variable 的 Node 也能整体跨 Situation。暂不引入，理由：
+
+1. 对常量 Node 没有内容。视角对常量没有意义；导出来自 Query，而 Query 只接受 Variable，“source 显式导出该 Node”无从表达。
+2. 视角与身份不可兼得。ref 的返回值是代理：类型判断照常成立，但它不 `===` 它指向的 Node，也不能当作同一个 Set 元素或 Map 键。Node 的身份就是对象身份（草案 2.1），领域代码按身份比较 Node。Variable 的 ref 没有这个问题，因为它由 `Value` 消费，领域比较的是读出的值。对 Node 代理而言，`Value` 若解包，成员 Variable 又按读取视角解析，失去视角；若不解包，则失去身份。
+3. 需求可以分解。需要视角的只是其中的 Variable，可以对它们逐个使用 `ref(situation, variable)`。
+
+等出现逐个 ref 不足以表达的具体用例（预计在比较兄弟假设时）再议。届时需要先回答：`Value` 对这种引用返回什么；领域代码以什么判断两个引用指向同一个 Node。
