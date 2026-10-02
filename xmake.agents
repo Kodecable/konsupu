@@ -1,0 +1,28 @@
+#!/bin/bash
+# For coding agents running in a sandbox.
+set -euo pipefail
+
+PROJECT_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$PROJECT_ROOT"
+
+CACHE_ROOT="$PROJECT_ROOT/build/.agents-xmake"
+export XMAKE_GLOBALDIR="$CACHE_ROOT/xmake-global"
+export XMAKE_PKG_CACHEDIR="$CACHE_ROOT/xmake-pkg-cache"
+export XMAKE_PKG_INSTALLDIR="$CACHE_ROOT/xmake-pkg-install"
+export ZIG_GLOBAL_CACHE_DIR="$CACHE_ROOT/zig-global-cache"
+export ZIG_LOCAL_CACHE_DIR="$CACHE_ROOT/zig-local-cache"
+export GOCACHE="$CACHE_ROOT/go-cache"
+export GOMODCACHE="$CACHE_ROOT/go-mod"
+export STATICCHECK_CACHE="$CACHE_ROOT/staticcheck-cache" 
+
+mkdir -p \
+    "$XMAKE_GLOBALDIR" \
+    "$XMAKE_PKG_CACHEDIR" \
+    "$XMAKE_PKG_INSTALLDIR" \
+    "$ZIG_GLOBAL_CACHE_DIR" \
+    "$ZIG_LOCAL_CACHE_DIR" \
+    "$GOCACHE" \
+    "$GOMODCACHE" \
+    "$STATICCHECK_CACHE"
+
+exec xmake "$@"

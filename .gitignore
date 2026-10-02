@@ -10,3 +10,9 @@ release/work
 .*.swp
 __debug_bin*
 __pycache__
+.agents
+.xmake
+.clangd
+
+# Foundation runtime metadata
+.runtime.lock
