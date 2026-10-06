@@ -19,6 +19,9 @@ export {
   ReportDataMembers,
   WalkReferences,
 } from "../Memory/Foundation/DataGraph.js";
+// RequireInput(condition, reason) reports that the Input is constructed wrongly
+// and sends it back to Input Translation for repair.
+export { RequireInput } from "../Memory/Foundation/InputStructureError.js";
 export const InputContract = {
   input: "Node[]; each actual Node occurs exactly once",
   order: "Node data references point to earlier occurrences",

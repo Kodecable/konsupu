@@ -191,3 +191,48 @@ task("go_env_run")
             curdir = path.join(os.projectdir(), "src", "konsupurt"), envs = envs
         })
     end)
+-- Assemble the Commons cognition space: the Foundation source with the
+-- src/commons overlay on top. The overlay adds its own files and may replace
+-- only the Foundation domain entries it implements and the root Test.js.
+task("commons_space")
+    set_menu {
+        usage = "xmake commons_space",
+        description = "Assemble build/commons-space from src/foundation and src/commons",
+        options = {}
+    }
+
+    on_run(function ()
+        local root = os.projectdir()
+        local foundation = path.join(root, "src", "foundation")
+        local overlay = path.join(root, "src", "commons")
+        local space = path.join(root, "build", "commons-space")
+        local replaceable = {
+            ["Memory/ValidateInput.js"] = true,
+            ["Memory/ResolveQuery.js"] = true,
+            ["Memory/ResolveQueryDefer.js"] = true,
+            ["Test.js"] = true,
+        }
+        os.tryrm(space)
+        os.mkdir(space)
+        for _, name in ipairs({"Memory", "Interface", "Test", "Resolve.js", "Test.js"}) do
+            os.cp(path.join(foundation, name), path.join(space, name))
+        end
+        for _, file in ipairs(os.files(path.join(overlay, "**"))) do
+            local relative = path.relative(file, overlay):gsub("\\", "/")
+            local target = path.join(space, relative)
+            local marker = path.filename(file) == ".konsupu-directory"
+            if os.isfile(target) and not marker and not replaceable[relative] then
+                raise("src/commons must not replace Foundation file " .. relative)
+            end
+            os.cp(file, target)
+        end
+        -- Every cognition directory needs its marker, hidden or not listed.
+        for _, dir in ipairs(os.dirs(path.join(overlay, "**"))) do
+            local target = path.join(space, path.relative(dir, overlay))
+            local marker = path.join(target, ".konsupu-directory")
+            if not os.isfile(marker) then
+                io.writefile(marker, "")
+            end
+        end
+        print("assembled %s", space)
+    end)

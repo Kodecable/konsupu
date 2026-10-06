@@ -755,7 +755,7 @@ Resolve success 的 Revision 在进入 Output Translation 前已经正式发布�
 1. Runtime 恢复 Resolve base Revision；
 2. 本次 Resolve 的 Persistent Cognition 修改全部丢弃；
 3. 当前 Resolve JSContext 结束；
-4. diagnostic 返回触发本次 Resolve 的同一个 Input Translation Agent；
+4. diagnostic 返回触发本次 Resolve 的同一个 Input Translation Agent；diagnostic 由 Runtime 的固定修复指引与该异常的 message（认知给出的原因，去除首尾空白、修复无效 UTF-8 后附在 `Reason:` 之后）组成，总长不超过 1024 个 Unicode code point，超出部分截断并以 `…` 标记；message 为空时只有固定指引；
 5. 该 Input Translation Agent 继续使用原来的 JSContext 修正输入；
 6. 再次 success 后创建新的 Resolve JSContext 重试。
 

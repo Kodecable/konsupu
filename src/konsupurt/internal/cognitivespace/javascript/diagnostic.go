@@ -39,7 +39,7 @@ func nativeError(status C.kjs_status_t, diagnostic *C.kjs_diagnostic_t, resolvin
 	trace := parseTrace(C.GoString(C.kjs_diagnostic_stack(diagnostic)))
 	if status == C.KJS_STATUS_INPUT_OBJECT_INVALID {
 		return &InputObjectInvalidError{Diagnostic: protocol.InputRepairDiagnostic{
-			Message:                  inputRepairMessage,
+			Message:                  inputRepairText(message),
 			StructuredInputMayMutate: true,
 		}}
 	}
@@ -75,6 +75,24 @@ func nativeError(status C.kjs_status_t, diagnostic *C.kjs_diagnostic_t, resolvin
 		infrastructure: status != C.KJS_STATUS_JAVASCRIPT_EXCEPTION &&
 			status != C.KJS_STATUS_LIMIT_EXCEEDED,
 	}
+}
+
+// The cognition's reason tells Input Translation what to repair. It follows
+// the fixed guidance and is cut to the diagnostic's length bound.
+const inputRepairLimit = 1024
+
+const inputRepairReasonPrefix = "\nReason: "
+
+func inputRepairText(reason string) string {
+	reason = strings.TrimSpace(strings.ToValidUTF8(reason, "\uFFFD"))
+	if reason == "" {
+		return inputRepairMessage
+	}
+	room := inputRepairLimit - len([]rune(inputRepairMessage)) - len([]rune(inputRepairReasonPrefix))
+	if runes := []rune(reason); len(runes) > room {
+		reason = string(runes[:room-1]) + "…"
+	}
+	return inputRepairMessage + inputRepairReasonPrefix + reason
 }
 
 func parseTrace(stack string) []protocol.TraceFrame {

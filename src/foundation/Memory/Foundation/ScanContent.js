@@ -6,6 +6,7 @@ import { RecordBinding } from "./Bindings.js";
 import { DataMembers, ReportDataMembers, WalkReferences } from "./DataGraph.js";
 import { IsAncestor } from "./SituationTree.js";
 import { Require } from "./InputStructureError.js";
+import { LateReferenceReason } from "./Placement.js";
 // Scan one occurrence. Two sources of references meet here and are kept apart:
 //
 // - Structure: every reference in the Node's own data members, found by
@@ -55,10 +56,9 @@ function CheckReference(plan, node, reference) {
   if (RefMeta(reference) !== null) return;
   Require(!(reference instanceof GlobalNode), "Use GlobalNode.Ref()");
   const position = plan.positions.get(reference);
-  Require(
-    position !== void 0 && position < plan.positions.get(node),
-    "Node references must point to preceding occurrences",
-  );
+  if (position === void 0 || position >= plan.positions.get(node)) {
+    Require(false, LateReferenceReason(plan, node, reference));
+  }
   if (reference instanceof Situation) return;
   if (IsAncestor(reference.situated, node.situated)) return;
   Require(

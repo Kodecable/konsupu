@@ -84,7 +84,7 @@ func TestFoundationSingleTurnInteraction(t *testing.T) {
 	project := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../.."))
 	root := filepath.Join(t.TempDir(), "space")
 	copyFoundationSource(t, project, root)
-	for _, name := range []string{"ResolveQuery.js", "ResolveQueryDefer.js", "IsKonsupuImperativeApplicable.js", "ResolveImperatives.js"} {
+	for _, name := range []string{"ValidateInput.js", "ResolveQuery.js", "ResolveQueryDefer.js", "IsKonsupuImperativeApplicable.js", "ResolveImperatives.js"} {
 		data, err := os.ReadFile(filepath.Join(project, "src/foundation/Test/Fixtures", name))
 		if err != nil {
 			t.Fatal(err)

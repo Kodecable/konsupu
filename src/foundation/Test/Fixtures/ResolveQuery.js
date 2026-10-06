@@ -4,6 +4,7 @@ import { Proposition } from "../../Memory/Foundation/Proposition.js";
 import { Brand } from "../../Memory/Foundation/Brand.js";
 import { GlobalNode } from "../../Memory/Foundation/GlobalNode.js";
 import { KonsupuIdentity } from "../../Memory/Foundation/KonsupuIdentity.js";
+import { RequireInput } from "../../Memory/Foundation/InputStructureError.js";
 class Sibling extends GlobalNode {
   static BRAND = Brand("test:fixture:Sibling:v1");
 }
@@ -37,6 +38,9 @@ export function ResolveQuery(input, query, remaining, state) {
     ]);
   }
   if (relation.op === "throw") throw new Error("Fixture Query failure");
+  if (relation.op === "invalid-input") {
+    RequireInput(false, "Fixture constraint names no operand");
+  }
   const values = relation.operands.map((value2) => {
     return value2 instanceof Variable ? view.Value(value2) : value2;
   });

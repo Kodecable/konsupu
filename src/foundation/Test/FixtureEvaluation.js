@@ -10,7 +10,8 @@ import {
 } from "../Interface/Nodes.js";
 import { TextOutput } from "../Interface/Outputs.js";
 import { Evaluate } from "../Memory/Foundation/Evaluate.js";
-import { Assert, Reject } from "./Assert.js";
+import { Assert, Reject, RejectWith } from "./Assert.js";
+import { RequireInput } from "../Interface/Nodes.js";
 import { ResolveQuery } from "./Fixtures/ResolveQuery.js";
 import { ResolveQueryDefer } from "./Fixtures/ResolveQueryDefer.js";
 import { IsKonsupuImperativeApplicable } from "./Fixtures/IsKonsupuImperativeApplicable.js";
@@ -83,4 +84,22 @@ export function TestFixtureDeferFailure() {
     "no progress in either Query entry",
     TypeError,
   );
+}
+export function TestFixtureInputInvalid() {
+  // A domain entry that finds the Input itself wrong reports it through
+  // RequireInput; the error keeps the domain's reason and is not wrapped.
+  const situation = new Situation();
+  const variable = new Variable(situation);
+  const relation = new FixtureProposition(situation, {
+    result: variable,
+    op: "invalid-input",
+    operands: [],
+  });
+  const query = new Query(situation, [variable]);
+  RejectWith(
+    () => Evaluate([situation, variable, relation, query], operations),
+    "Fixture constraint names no operand",
+  );
+  RequireInput(true, "a held condition passes");
+  Reject(() => RequireInput(false, ""), "RequireInput reason", TypeError);
 }

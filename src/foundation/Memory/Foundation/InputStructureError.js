@@ -13,3 +13,15 @@ export class InputStructureError extends Error {
 export function Require(condition, message) {
   if (!condition) throw new InputStructureError(message);
 }
+// The domain's channel for an Input construction error: the Input itself is
+// wrong (not merely unsupported by what the cognition knows), so Input
+// Translation must repair it. The root Resolve turns it into the Runtime's
+// InputObjectInvalidError. A domain that cannot answer returns a structured
+// value instead, and a fault in the domain implementation stays an ordinary
+// error.
+export function RequireInput(condition, reason) {
+  if (typeof reason !== "string" || reason === "") {
+    throw new TypeError("RequireInput needs a reason");
+  }
+  if (!condition) throw new InputStructureError(reason);
+}

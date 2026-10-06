@@ -20,7 +20,7 @@ func foundationFixture(t *testing.T, domain bool) (*Engine, *Interaction) {
 	root := filepath.Join(t.TempDir(), "space")
 	copyFoundationSource(t, project, root)
 	if domain {
-		for _, name := range []string{"ResolveQuery.js", "ResolveQueryDefer.js", "IsKonsupuImperativeApplicable.js", "ResolveImperatives.js"} {
+		for _, name := range []string{"ValidateInput.js", "ResolveQuery.js", "ResolveQueryDefer.js", "IsKonsupuImperativeApplicable.js", "ResolveImperatives.js"} {
 			data, err := os.ReadFile(filepath.Join(project, "src/foundation/Test/Fixtures", name))
 			if err != nil {
 				t.Fatal(err)
@@ -184,6 +184,42 @@ export default [situation, variable, constraint, query, unknown, ask];`)
 	var invalid *InputObjectInvalidError
 	if !errors.As(err, &invalid) {
 		t.Fatalf("imperative unresolved read: %T %v", err, err)
+	}
+}
+
+func TestFoundationDomainInputErrorRepairsInput(t *testing.T) {
+	_, interaction := foundationFixture(t, true)
+	output, err := resolveFoundation(t, interaction, foundationImports+`
+Object.defineProperty(constraint, "op", { value: "invalid-input" });
+export default [situation, variable, constraint, query];`)
+	if output != nil {
+		output.Close()
+		t.Fatal("rejected Input delivered output")
+	}
+	var invalid *InputObjectInvalidError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("domain input error must repair Input: %T %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "Reason: Fixture constraint names no operand") {
+		t.Fatalf("the domain's reason must reach Input Translation: %v", err)
+	}
+}
+
+func TestFoundationValidateInputRepairsInputWithoutQuery(t *testing.T) {
+	_, interaction := foundationFixture(t, true)
+	output, err := resolveFoundation(t, interaction, foundationImports+`
+Object.defineProperty(constraint, "op", { value: "reject-input" });
+export default [situation, variable, constraint];`)
+	if output != nil {
+		output.Close()
+		t.Fatal("rejected Input delivered output")
+	}
+	var invalid *InputObjectInvalidError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("domain lint must repair Input even without a Query: %T %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "Reason: Fixture lint rejects a reject-input node") {
+		t.Fatalf("the lint's reason must reach Input Translation: %v", err)
 	}
 }
 

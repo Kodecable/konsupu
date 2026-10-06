@@ -2,7 +2,7 @@
 
 Foundation 是普通 JavaScript 认知库，定义结构、节点、求值流程与固定认知入口。领域知识和领域算法由其他认知代码实现。
 
-本文汇总截至 Variable effect 定义的协商结果。配套代码提供基类、`ref` 的返回值、effect 存储与求解流程的实际实现，覆盖结构扫描、来源判定、值读取与提及反查；四个领域入口仍是显式抛错的待实现入口。
+本文汇总截至 Variable effect 定义的协商结果。配套代码提供基类、`ref` 的返回值、effect 存储与求解流程的实际实现，覆盖结构扫描、来源判定、值读取与提及反查；默认 `ValidateInput` 不做任何检查，其余四个领域入口仍是显式抛错的待实现入口。
 
 ## 1. 结构
 
@@ -280,6 +280,8 @@ Map<Situation, Map<Variable, VariableEffect>>
 
 Variable effect 不因这一步而变成 `resolved: true`。实际来源只有在后续求值赋值后才完成。需要 resolved 变量的语义操作必须区分二者：structural resolvedness 按结构分析的全量结果判定；实际 value 是否可读按 Variable effect 的完成状态判定。
 
+Structural Pass 全部成功后、任何 Query Resolution 与 Imperative Discovery 之前，Foundation 恰好调用一次领域入口 `ValidateInput(input, state)`（4.6）。它让领域对完整 Input 做语义检查；Input 中没有 Query、也没有指向 Konsupu 的 Imperative 时同样调用。它不是第二套结构检查：此时没有任何 Variable 的实际 value，领域不得读取 value。
+
 ### 3.3 Query Resolution
 
 按 Input 中 Query 的顺序执行。对每个 Query，先移除结构分析确定为本地已有、继承或由 `ref` 得到的变量，得到 remaining。
@@ -291,6 +293,8 @@ Query Node 之间的执行顺序严格按 Input 顺序，不允许破坏结构�
 Foundation 不分析 Variable 之间的取值依赖，也不为满足依赖调整 Query 顺序。领域在自己的 Interface 注释中声明依赖，读取前可探测 value 是否可读（见 3.7），并以输入构造错误报告被 Input 顺序破坏的依赖；Input Translation 负责构造满足依赖的 Input 顺序，互相依赖的 Variable 放入同一个 Query 联合求解。
 
 领域实现不得跨调用累积状态，只能用可见结构完成求解；需要额外前提时在自己的 Interface 注释中记载并自行抛异常，Foundation 不提供声明机制。领域实现可以借助原始 Query、Input 和 state 维护配对约束。它负责自己的尝试顺序；Foundation 不注册、排序或扫描领域 resolver。
+
+领域发现 Input 本身构造错误（而不是认知不足以回答）时，调用 Interface 导出的 `RequireInput(condition, reason)`：条件不成立即抛输入构造错误，由根 `Resolve.js` 转为 Runtime 的 `InputObjectInvalidError`，交回 Input Translation 修正；`reason` 进入 Runtime 的输入修复诊断（备忘第 16 节）。`reason` 必须是非空字符串。它可以在任何领域入口中使用，整个 Input 的语义检查通常放在 `ValidateInput`（4.6）。三类失败由此分开：Input 写错走 `RequireInput`；认知无法确定答案时返回结构化值；领域实现自身的错误抛普通异常，走 Learning。
 
 完整循环实现位于 `QueryLoop.js`、`Progress.js`。所有 Query 完成后才进入祈使处理。
 
@@ -336,6 +340,7 @@ Output Translation 自由组织文本。不得依赖数组下标表达步骤、�
 
 | 文件 | named export |
 |---|---|
+| Memory/ValidateInput.js | ValidateInput |
 | Memory/ResolveQuery.js | ResolveQuery |
 | Memory/ResolveQueryDefer.js | ResolveQueryDefer |
 | Memory/IsKonsupuImperativeApplicable.js | IsKonsupuImperativeApplicable |
@@ -343,7 +348,7 @@ Output Translation 自由组织文本。不得依赖数组下标表达步骤、�
 
 这些是 Foundation 对认知库的约定，不增加 Runtime 根目录 entry。内部模块、调用顺序和 dispatch 由认知库自定；没有 callback 注册 API。
 
-四个入口均同步执行，接收原始 Input 和同一次 Resolve 的 state。不提供 `visibleNodes`、额外 scope view 或通用 registry。传入完整 Input 不改变线性引用语义。
+五个入口均同步执行，接收原始 Input 和同一次 Resolve 的 state；`ValidateInput` 只接收这两者。不提供 `visibleNodes`、额外 scope view 或通用 registry。传入完整 Input 不改变线性引用语义。
 
 ### 4.2 ResolveQuery
 
@@ -399,16 +404,33 @@ resolved 必须是 remaining 的非空子集；outputs 可以为空，但每项�
 
 在祈使处理阶段检查完整祈使集合是明确允许的；不因此回溯改变 Query 的线性来源判定。
 
+### 4.6 ValidateInput
+
+```js
+export function ValidateInput(input, state) {
+    // Return normally when the Input passes.
+}
+```
+
+Structural Pass 全部成功后、任何 Query Resolution、Imperative 适用性判断与祈使执行之前，Foundation 恰好调用一次（3.2）。Input 中没有 Query、也没有指向 Konsupu 的 Imperative 时同样调用。
+
+- 正常返回表示通过，返回值被忽略；
+- 领域确认 Input 的语义构造违反自己的 Interface 契约时，调用 `RequireInput(condition, reason)`，交回 Input Translation 修正；
+- 其他异常按普通 Resolve 异常处理，进入 Learning；
+- 此时任何 Variable 都还没有实际 value，validator 不得读取 value，也不以读取 value 作为检查手段。
+
+它是领域的语义检查，不是第二套 Foundation 结构检查。Foundation 自带的默认实现什么也不做；领域包替换该文件。该入口是必需的固定导出，缺失即报错。
+
 ## 附录：实现与验证范围
 
 ### A. 核心代码
 
-配套实现按普通 `.js` ESM 文件拆分：类型与约束位于 `Memory/Foundation/`，四个领域入口位于 `Memory/`，对领域开放的导入位于 `Interface/`，自检位于 `Test/`。每文件满足 160 行；每行 80 列的限制当前由 `EnforceJavaScriptColumnLimit = false` 暂时关闭（见规范备忘第 7 节）。
+配套实现按普通 `.js` ESM 文件拆分：类型与约束位于 `Memory/Foundation/`，五个领域入口位于 `Memory/`，对领域开放的导入位于 `Interface/`，自检位于 `Test/`。每文件满足 160 行；每行 80 列的限制当前由 `EnforceJavaScriptColumnLimit = false` 暂时关闭（见规范备忘第 7 节）。
 
-结构扫描（`Analyze.js`、`ScanContent.js`、`PlanQueries.js`、`ValidateRefs.js`）、来源判定（`ResolutionSource.js`）、两个求解循环（`QueryLoop.js`、`ImperativeLoop.js`）、值读取（`Value.js`）与提及索引（`Bindings.js`）都已实现。四个领域入口是显式抛错的待实现入口；Memory 序列化未实现。
+结构扫描（`Analyze.js`、`ScanContent.js`、`PlanQueries.js`、`ValidateRefs.js`）、来源判定（`ResolutionSource.js`）、两个求解循环（`QueryLoop.js`、`ImperativeLoop.js`）、值读取（`Value.js`）与提及索引（`Bindings.js`）都已实现。默认 `ValidateInput` 不做任何检查；其余四个领域入口是显式抛错的待实现入口；Memory 序列化未实现。
 
 ### B. 验证范围
 
-`src/foundation/Test.js` 自检覆盖类型、结构、跨 Situation 引用、来源、ref 与信息流、值读取、提及反查与 global 身份、求解循环与祈使循环；`konsupurt` 的 Go 集成测试在真实 QuickJS Runtime 中验证 Input → Resolve → Output 的跨 Context 传递、失败分类与部分赋值回滚。统一由仓库根目录的 `./xmake.agents test` 运行。
+Foundation 自检主体位于 `src/foundation/Test/Suite.js`，导出 `FoundationSuite()`；根 `Test.js` 只调用它，上层认知包的根 `Test.js` 可以同时调用它与自己的自检。自检覆盖类型、结构与顺序错误的原因、跨 Situation 引用、来源、ref 与信息流、值读取、提及反查与 global 身份、`ValidateInput` 的调用时机、求解循环与祈使循环；`konsupurt` 的 Go 集成测试在真实 QuickJS Runtime 中验证 Input → Resolve → Output 的跨 Context 传递、失败分类与部分赋值回滚。统一由仓库根目录的 `./xmake.agents test` 运行。
 
 这不是对所有自然语言场景的证明；未覆盖范围见《Konsupu Foundation 使用说明》与《规范备忘》。

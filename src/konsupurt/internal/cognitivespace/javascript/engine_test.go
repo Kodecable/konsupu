@@ -300,9 +300,28 @@ export function Resolve() {
 	if !invalid.Diagnostic.StructuredInputMayMutate {
 		t.Fatal("input repair diagnostic must warn about possible input mutation")
 	}
-	if invalid.Diagnostic.Message != inputRepairMessage ||
-		strings.Contains(invalid.Diagnostic.Message, "repair input") {
-		t.Fatalf("input repair message was not sanitized: %q", invalid.Diagnostic.Message)
+	if invalid.Diagnostic.Message != inputRepairMessage+"\nReason: repair input" {
+		t.Fatalf("input repair message must carry the cognition's reason: %q", invalid.Diagnostic.Message)
+	}
+	if err := invalid.Diagnostic.Validate(); err != nil {
+		t.Fatalf("input repair diagnostic: %v", err)
+	}
+}
+
+func TestInputRepairTextBoundsTheReason(t *testing.T) {
+	if got := inputRepairText("  "); got != inputRepairMessage {
+		t.Fatalf("an empty reason keeps the fixed guidance alone: %q", got)
+	}
+	long := inputRepairText(strings.Repeat("é", 4096))
+	if n := len([]rune(long)); n != inputRepairLimit {
+		t.Fatalf("a long reason must be cut to the bound: %d", n)
+	}
+	if !strings.HasSuffix(long, "…") || !strings.HasPrefix(long, inputRepairMessage) {
+		t.Fatalf("a cut reason keeps the guidance and marks the cut: %q", long)
+	}
+	broken := inputRepairText("bad \xff byte")
+	if err := (protocol.InputRepairDiagnostic{Message: broken, StructuredInputMayMutate: true}).Validate(); err != nil {
+		t.Fatalf("invalid UTF-8 must be repaired: %v", err)
 	}
 }
 

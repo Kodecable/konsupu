@@ -9,6 +9,7 @@ import { CollectQueries, CheckListings, PlanQueries } from "./PlanQueries.js";
 import { ValidateRefs } from "./ValidateRefs.js";
 import { Imperative } from "./Imperative.js";
 import { DataField } from "./DataGraph.js";
+import { LateParentReason } from "./Placement.js";
 export function Analyze(input) {
   Require(Array.isArray(input), "Input must be a Node array");
   const plan = {
@@ -41,7 +42,9 @@ export function Analyze(input) {
     );
     if (parent !== null) {
       Require(RefMeta(parent) === null, "situated cannot be a proxy");
-      Require(plan.positions.has(parent), "Situation must precede its member");
+      if (!plan.positions.has(parent)) {
+        Require(false, LateParentReason(input, index, parent));
+      }
     }
     if (node instanceof SituatedNode) {
       Require(parent !== null, "SituatedNode needs a Situation");

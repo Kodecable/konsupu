@@ -224,3 +224,44 @@ Query Node 之间的执行顺序严格按 Input 顺序，不允许破坏结构�
 3. 需求可以分解。需要视角的只是其中的 Variable，可以对它们逐个使用 `ref(situation, variable)`。
 
 等出现逐个 ref 不足以表达的具体用例（预计在比较兄弟假设时）再议。届时需要先回答：`Value` 对这种引用返回什么；领域代码以什么判断两个引用指向同一个 Node。
+
+## 16. 本轮确认（2026-10-03）
+
+**领域报告输入构造错误。** 此前领域入口抛出的任何异常都按 Resolve 异常处理，只有 Foundation 自己的访问 API（`Value`、`RequireValue` 与结构扫描）会产生输入构造错误。领域因此无法说"这条 Input 写错了"：Aesop Phase 2 中，题目编码写错时只能降级为"未确立"之类的正常结果，与"故事没有说明"无从区分。
+
+新增 `RequireInput(condition, reason)`，由 `Interface/Nodes.js` 导出，实现位于 `InputStructureError.js`：条件不成立时抛 `InputStructureError`，根 `Resolve.js` 照常转为 `InputObjectInvalidError`。领域代码也可以直接从 `konsupu:input` 抛 `InputObjectInvalidError`，Foundation 不拦截；但统一经 `RequireInput` 使脱离 Runtime 运行的自检与夹具得到同一种错误类型，也使输入错误只有一个来源。`reason` 为空是领域实现错误，抛 `TypeError`。自检 `TestFixtureInputInvalid`；Go 集成测试 `TestFoundationDomainInputErrorRepairsInput` 验证 Runtime 把它分类为输入修复而不是 Resolve 异常。
+
+**原因进入诊断（用户授权修改 Runtime）。** 此前 Runtime 构造输入修复诊断时只用固定文案（`javascript/diagnostic.go` 的 `inputRepairMessage`），丢弃 JS 异常的 message，Input Translation 只得知"需要修正"，不得知哪里错了。现在诊断为固定指引加 `Reason:` 与异常 message：`RequireInput`、`RequireValue` 与结构扫描的原因都经根 `Resolve.js` 成为 `InputObjectInvalidError` 的 message，从而到达 Input Translation。总长受协议上限 1024 个 code point 约束，过长时截断并以 `…` 标记，无效 UTF-8 被替换，空原因只保留固定指引（`inputRepairText`）。测试：`TestNativeInputObjectInvalidIsClassifiedPrecisely` 改为要求原因在场，`TestInputRepairTextBoundsTheReason` 覆盖空、超长与无效 UTF-8，`TestFoundationDomainInputErrorRepairsInput` 验证领域原因端到端到达。v0.9 规范的 InputObjectInvalidError 流程相应写明诊断内容。
+
+
+## 17. 本轮确认（2026-10-04）：一次性领域语义检查与自检组合
+
+**`ValidateInput`。** 固定领域入口增加第五个：`Memory/ValidateInput.js` 导出 `ValidateInput(input, state)`。`Evaluate` 在 `Analyze` 成功之后、`QueryLoop` 之前恰好调用一次，返回值被忽略（草案 3.2、4.6）。
+
+此前领域只能在 `ResolveQuery` 等入口中检查 Input，有两个问题：入口不得跨调用保存状态，所以每次调用都要对整个 Input 重复检查；Input 中没有 Query、也没有指向 Konsupu 的 Imperative 时，任何领域入口都不会被调用，错误的 Input 无人检查。一次性入口同时解决这两点。Commons 的语义 lint（`Konsupu_Commons_规范草案.md` 第 6.4、11.2、12 节所列的 lint 错误；完整集合见该文第 16 节第 14 项）由此入口执行。
+
+- 它是领域语义检查，不是第二套结构检查；调用时没有任何 Variable 的实际 value，领域不得读取 value。
+- 输入错误经第 16 节已有的 `RequireInput(condition, reason)` 报告，原因进入 Runtime 诊断；不另设单参数版本。其他异常仍是普通 Resolve 异常，进入 Learning。
+- Foundation 的默认实现什么也不做，所以没有领域语义时 Foundation 自检照常运行。该入口与其余四个一样是必需的固定导出，缺失即报错。
+- `operations.ValidateInput` 是 `Evaluate` 的内部测试接缝，与其余四个入口相同。
+
+自检 `Test/Validate.js`：调用恰好一次、先于第一个 `ResolveQuery`、看到完整 Input 与 state；没有 Query 的 Input 同样被检查，拒绝时带出领域原因；非函数的入口抛 `TypeError`。Go 集成测试 `TestFoundationValidateInputRepairsInputWithoutQuery` 验证 Runtime 把这一拒绝分类为输入修复，并带出原因。测试夹具 `Test/Fixtures/ValidateInput.js` 拒绝带 `op: "reject-input"` 的节点，Go 测试把它与其余四个夹具一起写入临时空间。
+
+**自检组合。** Foundation 自检主体移到 `Test/Suite.js`，导出 `FoundationSuite()`；根 `Test.js` 只调用它。Runtime 只调用根 `Test()`，所以建立在 Foundation 之上的认知包（Commons）需要在自己的根 `Test.js` 中同时运行 Foundation 与自己的自检；它从 `Test/Suite.js` 导入 `FoundationSuite`，不必复制 Foundation 的测试清单。纯结构改动，不涉及语义。
+
+
+## 18. 本轮确认（2026-10-04）：顺序错误的原因写明位置与改法
+
+**问题。** Commons 编码试验中，flash 级模型的 Input 经常违反"引用必须指向更早的 occurrence"：先推入引用者、后推入被引用的 Manner 或言语语境；5 次运行中有 2 次如此。第 16 节之后，结构扫描的原因已经到达 Input Translation，但原先的原因只有 `Node references must point to preceding occurrences` 与 `Situation must precede its member`，不说是哪个节点、哪个字段、指向谁，翻译者无法据此定位。
+
+**改动。** 两条顺序规则的原因保留原有句子作为开头，后面附上位置与改法：
+
+- 引用晚于引用者：`Node references must point to preceding occurrences: <引用者类名> at Input[i] field "<字段>" references <被引用者类名> at Input[j]. Fix: push the <被引用者类名> into Input before the <引用者类名>.`
+  - 被引用者不在 Input 中时，写 `references a <类名> that is not in Input`；
+  - 只经 `ReportReferences` 汇报、不在任何数据成员中的引用，没有字段，省略 `field` 部分；
+  - 字段按数据成员的声明顺序取第一个包含该引用的字段，经普通容器递归。
+- 父 Situation 晚于成员：`Situation must precede its member: <类名> at Input[i] is situated in a Situation at Input[j]. Fix: push the Situation into Input before its members.` 父 Situation 不在 Input 中时，写 `in a Situation that is not in Input`。
+
+类名取自构造器名，位置是 Input 数组下标。原因只描述结构，不读取任何领域字段（如 `name`、`title`），所以 Foundation 仍不依赖领域约定。位置信息只在失败路径上计算，不影响成功路径的开销。
+
+原句保留为前缀，既有自检与按子串匹配原因的测试不变。新增自检 `Test/Order.js` 覆盖：晚于引用者、不在 Input 中、容器内的引用带出外层字段、父 Situation 晚于成员与不在 Input 中。
