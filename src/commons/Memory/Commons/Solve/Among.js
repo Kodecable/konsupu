@@ -13,6 +13,7 @@ import { Budget } from "../Engine/Prove.js";
 import { NewContext } from "../Engine/Context.js";
 import { FreeVariables } from "./Terms.js";
 import { ChooseProposition, Distinct } from "./AmongProposition.js";
+import { Reasons } from "../Engine/Conflicts.js";
 
 export function SolveAmong(world, among) {
   try {
@@ -37,7 +38,8 @@ export function SolveAmong(world, among) {
 function Settled(solved, ctx) {
   if (solved.status !== Status.OK) return solved;
   if (ctx.flags.conflict) {
-    return { status: Status.Ambiguous, candidates: [solved] };
+    const conflicts = Reasons(ctx.flags);
+    return { status: Status.Ambiguous, candidates: [solved], conflicts };
   }
   const cut = ctx.flags.truncated || ctx.kb.ctx.flags.truncated;
   return cut ? { status: Status.Unknown } : solved;
@@ -94,9 +96,12 @@ function Matches(node, side, pool, free, ctx, typed) {
   const found = [];
   const env = { ...NewEnv(free), raw: new Set([node]) };
   for (const candidate of pool) {
-    if (typed && !IsA(candidate, node.constructor)) continue;
-    for (const fitted of FitFields(node, side, candidate, GROUND, env, ctx)) {
-      found.push({ term: candidate, bindings: fitted.bindings });
+    // A correspondence group fits through any of its descriptions.
+    for (const facet of ctx.kb.Facets(candidate)) {
+      if (typed && !IsA(facet, node.constructor)) continue;
+      for (const fitted of FitFields(node, side, facet, GROUND, env, ctx)) {
+        found.push({ term: candidate, bindings: fitted.bindings });
+      }
     }
   }
   return found;

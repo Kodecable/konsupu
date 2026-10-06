@@ -3,7 +3,8 @@
 // Situation or its ancestors (Validity.variable, a Corresponds side, a
 // Variable inside an Among description). Every requested Variable gets a
 // boxed { status, result }; a conclusion depending on several declarations
-// takes the worst of their statuses (7.3).
+// takes the worst of their statuses (7.3). An asserted Proposition its
+// class's definition rules out is an Input error first (Definitions.js).
 import { RequireInput } from "../../../Interface/Nodes.js";
 import { Perspective } from "../../Foundation/Perspective.js";
 import { Box, Status, Worst } from "../Model/Result.js";
@@ -14,10 +15,12 @@ import { NewContext } from "../Engine/Context.js";
 import { SolveValidity } from "./Validity.js";
 import { SolveCorresponds } from "./Corresponds.js";
 import { Answerable, DescriptionVariables } from "./Terms.js";
+import { CheckDefinitions } from "./Definitions.js";
 
 export function SolveQuery(input, query, remaining, state) {
   const world = new World(input, new Perspective(query, state));
   world.outputs = new Set(remaining);
+  CheckDefinitions(world);
   const declarations = world.index
     .Ancestors(query.situated)
     .flatMap((situation) => world.index.Members(situation))
@@ -61,7 +64,8 @@ function Unasked(world, query, variable) {
   );
 }
 
-// { status, value, candidates } of one declaration for one Variable.
+// { status, value, candidates, conflicts } of one declaration for one
+// Variable.
 function Outcome(world, node, variable) {
   if (node instanceof Validity) return SolveValidity(world, node);
   if (node instanceof Corresponds) {
@@ -72,7 +76,11 @@ function Outcome(world, node, variable) {
     const candidates = (solved.candidates ?? []).map((item) => {
       return item.bindings.get(variable);
     });
-    return { status: Status.Ambiguous, candidates };
+    return {
+      status: Status.Ambiguous,
+      candidates,
+      conflicts: solved.conflicts,
+    };
   }
   if (solved.status !== Status.OK) return { status: solved.status };
   if (!solved.bindings.has(variable)) return { status: Status.Unknown };
@@ -99,9 +107,16 @@ function Combine(world, outcomes) {
     const candidates = outcomes
       .flatMap((outcome) => outcome.candidates ?? [])
       .filter((value) => value !== void 0 && Answerable(value));
+    // Why the knowledge contradicts itself, when it does (diagnosis only).
+    const conflicts = [
+      ...new Set(outcomes.flatMap((outcome) => outcome.conflicts ?? [])),
+    ];
     return Box(
       status,
-      Object.freeze({ candidates: Object.freeze(candidates) }),
+      Object.freeze({
+        candidates: Object.freeze(candidates),
+        conflicts: Object.freeze(conflicts),
+      }),
     );
   }
   return Box(status, void 0);

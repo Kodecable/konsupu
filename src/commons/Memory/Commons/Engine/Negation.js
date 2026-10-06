@@ -19,7 +19,7 @@ import { Not } from "../Vocabulary/Logic.js";
 import { Deref, FieldOf, IsA, IsVar, PENDING, TypeOf } from "./Terms.js";
 import { Flatten, TimeOf } from "./Normalize.js";
 import { MakeApi } from "./Api.js";
-import { BindPoints } from "./Times.js";
+import { BindRule } from "./Times.js";
 import { Solve } from "./Prove.js";
 import { Excluded } from "./Refute.js";
 
@@ -54,7 +54,7 @@ function* Fails(part, env, ctx) {
 
 function* ByRules(term, side, part, env, ctx, Type) {
   if (typeof Type?.Judge === "function") {
-    for (const next of BindPoints(term, side, Type.POINTS ?? [], env, ctx)) {
+    for (const next of BindRule(term, side, Type, env, ctx)) {
       const api = MakeApi(term, side, next, ctx, null);
       if (Type.Judge(api) === false) yield next;
     }

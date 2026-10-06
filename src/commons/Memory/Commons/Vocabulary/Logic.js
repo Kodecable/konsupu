@@ -66,6 +66,8 @@ export class NoInstance extends Proposition {
   static FIELDS = {
     of: { required: true, pattern: true, variance: "contra" },
   };
+  // It closes the pattern's instances with none (Engine/Instances.js).
+  static CLOSES = { of: "of" };
   constructor(situated, fields = {}) {
     Final(NoInstance, new.target);
     super(situated, fields);
@@ -88,6 +90,8 @@ export class Only extends Proposition {
     of: { required: true, pattern: true, variance: "contra" },
     among: { required: true, kind: "list" },
   };
+  // It closes the pattern's instances with `among` (Engine/Instances.js).
+  static CLOSES = { of: "of", among: "among" };
   constructor(situated, fields = {}) {
     Final(Only, new.target);
     super(situated, fields);

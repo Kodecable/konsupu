@@ -16,6 +16,9 @@ import * as Limits from "./Limits.js";
 import * as Conflict from "./Conflict.js";
 import * as Negation from "./Negation.js";
 import * as AllTime from "./AllTime.js";
+import * as Windows from "./Windows.js";
+import * as Ordinals from "./Ordinals.js";
+import * as Diagnosis from "./Diagnosis.js";
 
 const Modules = [
   Types,
@@ -28,6 +31,9 @@ const Modules = [
   Conditional,
   Time,
   TimeQuery,
+  Windows,
+  Ordinals,
+  Diagnosis,
   Conflict,
   Negation,
   AllTime,

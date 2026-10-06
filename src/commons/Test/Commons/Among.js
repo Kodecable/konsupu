@@ -5,7 +5,7 @@ import {
   Variable,
   NoInstance,
 } from "../../Interface/Commons.js";
-import { Wolf, Dog, Drop, Thing, Person, Next } from "./Lexicon.js";
+import { Wolf, Dog, Drop, Thing, Person, Then } from "./Lexicon.js";
 import { Story } from "./Harness.js";
 
 // One candidate: OK, and the description's Variable takes its value.
@@ -109,10 +109,10 @@ export function TestAmongProposition() {
   const [a, b, c] = ["put", "try", "think"].map((name) => {
     return t.Add(new Drop(t.s, { name }));
   });
-  t.Hold(new Next(t.s, { earlier: a, later: b }));
-  t.Hold(new Next(t.s, { earlier: b, later: c }));
+  t.Hold(new Then(t.s, { earlier: a, later: b }));
+  t.Hold(new Then(t.s, { earlier: b, later: c }));
   const after = t.Add(new Variable(t.s));
-  t.Among(new Next(t.s, { earlier: a, later: after }));
+  t.Among(new Then(t.s, { earlier: a, later: after }));
   t.Expect(after, "OK", b, "what happened after putting the beak in");
 }
 

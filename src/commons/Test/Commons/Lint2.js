@@ -46,7 +46,8 @@ export function TestLintConditional() {
   Rejects(Rule(u, items, [x], [], a, b), "Each constraint of a Conditional");
 }
 
-// 14.3: one start and one end anchor per Event, in its Situation.
+// 14.3: one start and one end anchor per Event, in its Situation, and no
+// Virtual of their own.
 export function TestLintAnchors() {
   const s = new Situation();
   const shut = new Shut(s);
@@ -59,6 +60,14 @@ export function TestLintAnchors() {
   const away = new EndAnchor(other, { of: event });
   const mention = new Thing(t, { scene: other });
   Rejects([t, other, mention, event, away], "An Event anchor lives in");
+  // The anchors of a Virtual Event are Virtual with it (11.2); declared on
+  // their own they would come apart from it.
+  const u = new Situation();
+  const deed = new Shut(u);
+  const begins = new StartAnchor(u, { of: deed });
+  const input = [u, deed, new Virtual(u, { node: deed }), begins];
+  input.push(new Virtual(u, { node: begins }));
+  Rejects(input, "Virtual does not modify an Event anchor");
 }
 
 // A queried Variable must be determined by a declaration; an unasserted

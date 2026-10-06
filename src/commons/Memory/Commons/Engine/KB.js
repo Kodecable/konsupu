@@ -13,13 +13,15 @@ import { Derive, FactKey } from "./Derive.js";
 import { NewContext } from "./Context.js";
 import { Objects, Points, FactPoints } from "./Scope.js";
 import { TimeOrder } from "../Time/Order.js";
+import { Groups } from "./Groups.js";
 
 export class KB {
   constructor(world, situation) {
     this.world = world;
     this.index = world.index;
     this.situation = situation;
-    this.reps = null;
+    this.groups = new Groups(this);
+    this.instances = new Map();
     this.facts = null;
     this.keys = new Set();
     this.byType = new Map();
@@ -27,21 +29,26 @@ export class KB {
     this.witnesses = new Map();
     this.ctx = NewContext(world, this);
   }
-  // Correspondences (6.3) as one representative per group: the group's
-  // earliest Node in Input, which is also the preferred answer (7.3).
+  // Correspondences (6.3): the representative of a Node's group, and the
+  // members describing it (Engine/Groups.js).
   Rep(node) {
-    if (this.reps === null) {
-      this.reps = new Map();
-      for (const link of this.index.OfType(Corresponds)) {
-        if (!this.index.Visible(link.situated, this.situation)) continue;
-        const left = this.Side(link, "left");
-        const right = this.Side(link, "right");
-        if (left !== null && right !== null) this.Union(left, right);
-      }
+    return this.groups.Rep(node);
+  }
+  Facets(node) {
+    return IsNode(node) ? this.groups.Facets(node) : [node];
+  }
+  // Whether some description of a term is of class Type.
+  Is(term, Type) {
+    return this.Facets(term).some((facet) => IsA(facet, Type));
+  }
+  // Calls `link` with the two sides of every visible Corresponds.
+  Links(link) {
+    for (const node of this.index.OfType(Corresponds)) {
+      if (!this.index.Visible(node.situated, this.situation)) continue;
+      const left = this.Side(node, "left");
+      const right = this.Side(node, "right");
+      if (left !== null && right !== null) link(left, right);
     }
-    let item = node;
-    while (this.reps.has(item)) item = this.reps.get(item);
-    return item;
   }
   Side(link, key) {
     try {
@@ -52,14 +59,6 @@ export class KB {
       if (error instanceof StatusSignal) return null;
       throw error;
     }
-  }
-  Union(left, right) {
-    const a = this.Rep(left);
-    const b = this.Rep(right);
-    if (a === b) return;
-    const earlier = this.index.Position(a) <= this.index.Position(b);
-    if (earlier) this.reps.set(b, a);
-    else this.reps.set(a, b);
   }
   EventPoint(event, kind) {
     const anchor = IsNode(event) ? this.index.AnchorOf(event, kind) : null;
@@ -112,7 +111,7 @@ export class KB {
     return Objects(this, ctx);
   }
   Events() {
-    return this.Objects().filter((node) => IsA(node, Event));
+    return this.Objects().filter((node) => this.Is(node, Event));
   }
   Points() {
     return Points(this);

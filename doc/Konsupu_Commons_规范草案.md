@@ -217,6 +217,8 @@ story
 
 **可见范围。** 对应（`Corresponds` 与 `Among` 确定的对应）只在它所在的 Situation 及其后代中可见；在其他 Situation 中判断时，这一对应不存在。这与 Foundation 的提及反查一致：反查只返回视角祖先链上的提及者。
 
+**对应组的描述。** 经 `Corresponds` 对应的语境对象组成一组，谈论同一个实际对象。在 Situation S 中判断时，这个对象是什么（它的 class 与字段），由组中位于 S 及其祖先上的成员共同给出：每个这样的成员的描述都对它成立。其他语境（信念、话语等）中的成员只提供身份，它的描述属于它自己的语境：狐狸以为的“跳下”与故事中的“偶然掉落”对应时，在故事中这件事是偶然掉落，不是跳下。组中没有成员位于 S 及其祖先上时，全部成员的描述都对它成立。这些都与成员在 Input 中的先后无关（原则 2）。
+
 **`SameReferent`。** `SameReferent(left, right)` 是普通 Proposition：某个认知主体认定 `left` 与 `right` 同指。它可以被相信、被否定、被询问。`Corresponds` 是 Situation 实际采用的对应，`SameReferent` 是关于对应的认知，两者不得互相替代。
 
 语境对象之间的“不同”由默认规则给出（1.1、6.4），Commons 不提供 `Distinct`。
@@ -272,6 +274,7 @@ Virtual(node=steal)        // the act of stealing sheep, not one occurrence of i
 
 - 行为类型：`Unable.deed`、`Forbids.deed`、`Habitual.deed`；
 - 量化：`Only.of`、`NoInstance.of`；
+- 序数：`Nth.of`、`Next.of`（10.5）；
 - 意图中的行为：`Promises.deed`、`Goal.objective`、`InOrderTo.goal`；
 - `Seek` 一类内涵动词的对象字段。
 
@@ -289,6 +292,7 @@ Virtual(node=steal)        // the act of stealing sheep, not one occurrence of i
 - 被 Assertion 的 Proposition 经普通字段提及 Virtual Node（它是模式的约束，不是事实）；
 - 未被 `Virtual` 修饰的非 Proposition Node 经普通字段引用 Virtual Node；
 - 模式中的 Node 不在消费者所在 Situation 或其祖先链上（提及反查只返回视角祖先链上的提及者）。
+- `Virtual` 修饰 Event 的锚点：Virtual Event 的锚点随 Event 一起是 Virtual（11.2），单独声明会使锚点成为与 Event 脱钩的另一个可变位置；“某一时刻”用 Virtual 的 `TimeAnchor` 加 `Within`（14.4）。
 
 #### 量化由消费者决定
 
@@ -339,7 +343,7 @@ Query 的结果由两个独立字段组成：
 | `Unknown` | 求解方法已实现，但已有信息不足以确定结果 |
 | `NoMethod` | 没有已知的求解方法：类或规则被声明为待实现的桩，求解到达桩 |
 
-status 不是结果值，不作为 `result` 出现。非 `OK` 时 `result` 的数据结构本版未定义（16 第 13 项）。
+status 不是结果值，不作为 `result` 出现。非 `OK` 时 `result` 的数据结构本版未定义（16 第 13 项）。因知识自相矛盾而得到 `Ambiguous` 时（8.4、14.7），实现宜附带矛盾的来源，指出涉及的 Input 位置，供翻译排查；它只是诊断，不是结果值。
 
 **多值即歧义。** 一个 Variable 只有一个值，它的多个候选值总是不可能同时成立，所以多值就是 `Ambiguous`，不另区分“多值答案”与“歧义”。`Validity` 同时推出 `true` 与 `false` 时同样是 `Ambiguous`（8.4）。
 
@@ -348,7 +352,7 @@ status 不是结果值，不作为 `result` 出现。非 `OK` 时 `result` 的�
 - 在当前可见范围内经 `Corresponds` 或 `Among` 确定为对应的 Node（6.3）；
 - 实际相同、没有时间差的时间锚点。
 
-此时结果为 `OK`，实现宜返回其中在 Input 中最靠前的那个。
+此时结果为 `OK`，实现宜返回其中位于判断所在 Situation 及其祖先上、在 Input 中最靠前的那个；没有这样的成员时，返回全部成员中最靠前的。返回哪一个只是答案的选择，不影响推导（6.3）。
 
 **传播。** 依赖非 `OK` Variable 的结论自动成为非 `OK`。依赖多个非 `OK` 来源时，取优先级最高者：
 
@@ -413,7 +417,9 @@ Validity(situated=..., proposition=P, variable=v)
 | 两者都能推出 | `Ambiguous` | 候选为 `true` 与 `false` |
 | 不知道怎样判断 P | `NoMethod` | — |
 
-“能推出”包括显式 Assertion 与推导规则，不限于 `situated` 所谈论的 Node。`Among` 作用于 Proposition 时同样以“可以推出”为候选（6.2）；区别在于 `Among` 为 `node` 中的 Variable 提供值，`Validity` 给出成立性。
+“能推出”包括显式 Assertion 与推导规则，两者没有优先级：被断言的 P 又被某个推导规则判为不成立时，两者都能推出，结果为 `Ambiguous`，暴露知识中的矛盾（定义性规则除外，见下）。“能推出”也不限于 `situated` 所谈论的 Node。`Among` 作用于 Proposition 时同样以“可以推出”为候选（6.2）；区别在于 `Among` 为 `node` 中的 Variable 提供值，`Validity` 给出成立性。
+
+**定义性规则。** 类可以声明它的判定规则是定义性的：规则只由该 Proposition 自己的字段（字段值的 class 与值）决定，是这个 class 含义的一部分，例如“偶然发生的事不为任何目的”。不属于任何语境的 Situation（它的 root 不被 `content` 等字段引用为语境，12）中被断言、又被定义性规则判为不成立的 Proposition 是输入错误，不论问的是什么，由 Input Translation 修复：通常是把某人说的、相信的内容断言在了世界中，或选错了 class。语境中的内容可以不自洽（说谎、糊涂的信念），在语境中判断时仍按上表得到 `Ambiguous`。依赖其他认知的规则（先后、计数等）不是定义性的，与断言矛盾时得到 `Ambiguous`。
 
 P 中可以含有没有被 Query 的 Variable。求解器可以在内部为它们取得值以完成推导，但不写入；只有被 Query 的 Variable 得到结果。
 
@@ -445,7 +451,7 @@ s
 具体认知声明稳定的语义推导，例如：
 
 ```text
-Next(a, b)                 → Before(a, b)
+Next(earlier=a, later=b)   → Before(start(a), start(b))
 Unable(actor, generalDeed) → Unable(actor, moreSpecificDeed)
 ```
 
@@ -471,6 +477,7 @@ Unable(actor, generalDeed) → Unable(actor, moreSpecificDeed)
 |---|---|---|---|
 | 肯定：第 2 节的字段满足；`Habitual.deed`、`Promises.deed`、`Goal.objective`、`InOrderTo.goal` | S | G | S ⊑ G |
 | 否定：`Not`、`NoInstance`、`Unable.deed`、`Forbids.deed`、`Only.of`、`Conditional` 前件 | G | S | S ⊑ G |
+| 精确：`Nth.of`、`Next.of`（10.5） | S | G | S ⊑ G 且 G ⊑ S |
 
 关系的字段在比较时各有方向，由该关系自己的规则声明。例如 `In(P, D)` 要求每一点成立，D 越大越具体：`In(P, D大) ⊑ In(P, D小)`；`Within(a, D)` 相反：`Within(a, D小) ⊑ Within(a, D大)`。
 
@@ -546,6 +553,37 @@ Only(of=x, among=[nurse])                  // all who did something: the nurse
 ### 10.4 其他量化
 
 本版不提供 `All`。“所有 X 都 Y”用 `Conditional` 的显式全称表达（11.2）；“通常 X”由 `Habitual` 等普通认知表达；“不能做 X”由 `Unable` 表达；“禁止 X”由 `Forbids` 表达。`Virtual` 本身不承担量词。
+
+### 10.5 序数：`Nth` 与 `Next`
+
+```js
+Nth(of=head, n=k, item=e, by=...)          // e is the k-th instance of the pattern (k from 1)
+Next(earlier=a, later=b, of=head, by=...)  // b is the first instance of the pattern after a
+```
+
+二者都是普通 Proposition，按每个实例的一个锚点排序：默认是开始锚点，`by` 为 `"end"` 时是结束锚点；锚点重合的实例不分先后。`of` 是模式的头（6.4）；`Next` 不写 `of` 时，模式是任意 Event。`item`、`later` 为 Variable 时，可以用 `Among` 询问“第 k 个”“下一个”。
+
+**开放世界。** 缺失认知不产生序数（原则 5）：不知道还有别的实例，不等于没有别的实例。因此：
+
+- 已知至少 k 个实例早于 e 时，`Nth(of, k, e)` 不成立；已知某个实例落在 a 与 b 之间时，`Next(a, b)` 不成立。这不需要任何封闭；
+- 成立需要封闭：同一个模式头上被断言的 `Only(of=head, among=[...])` 说明实例都在所列之中，`NoInstance(of=head)` 说明没有实例。封闭之下，e 已知是实例，所列之中可能是实例且可能早于 e 的恰好 k−1 个，并且它们都已知是实例、已知早于 e 时，`Nth` 成立；所列之中没有一个可能是实例且可能落在 a 与 b 之间时，`Next` 成立；
+- 其余情况为未知。
+
+例如“男孩第二次喊狼来了是哪一次”，故事说男孩一共喊了三次：
+
+```text
+c = Cry()
+Virtual(c)
+Agent(action=c, actor=boy)
+Only(of=c, among=[cry1, cry2, cry3])      // the boy cried three times in all
+x = Variable
+Among(node=Nth(of=c, n=2, item=x), situation=story)
+Query(x)                                  // x = cry2
+```
+
+**原文说出的序数。** 原文直接说“第三次”时，翻译断言 `Nth`，不需要封闭。被断言的序数与已知的先后冲突时（例如已知有三个更早的实例），结果为 `Ambiguous`（8.4）。
+
+**比较方向。** `of` 两侧必须是同一个模式：较窄模式中的第 k 个不是较宽模式中的第 k 个，反之亦然（9.1“精确”）。被断言的 `Next(a, b)` 给出 a 的锚点早于 b 的对应锚点（第 9 节）。
 
 ---
 
@@ -661,6 +699,16 @@ In(Occurs(e), duration(e))
 
 模式中的 Event 同样如此：“某段时间内发生的事”写成 `In(Occurs(e), duration(e))` 加 `Within(start(e), D)`，不写成 `In(Occurs(e), D)`。后者表示 e 在 D 的每一点都在发生，否定或穷尽它几乎不排除任何东西。
 
+`Only` 与 `NoInstance` 排除一个被问的事物，要求问句的描述蕴含模式的约束体，时间窗也不例外。事件的时间窗有三种说法，蕴含关系如下：
+
+| 说法 | 写法 | 蕴含 |
+|---|---|---|
+| 开始于 D | canonical 写法加 `Within(start(x), D)` | 某一时刻 |
+| 在 D 的每一点都在发生 | `In(Occurs(x), D)` | 某一时刻 |
+| 在 D 的某一时刻正在发生 | Virtual 锚点 a、`Within(a, D)` 与 `At(Occurs(x), a)` | — |
+
+后两种推不出“开始于 D”：x 可以在 D 之前就已开始。因此窗口写在开始上的模式（`Within(start(e), D)`）只排除同样写明“开始于 D”的问句；问“D 中有没有在扔”（每一点或某一时刻）得到未知，不是假。窗口写在某一时刻上的模式（14.4）排除上表三种问句，但也排除 D 之前开始、延续进 D 的事。按原文选择模式的说法，问句与之对齐。
+
 Interface 可以提供构造辅助（例如 `Occurred(e)`），一次生成 e 的锚点与上述 canonical 写法。
 
 ### 13.2 施事
@@ -740,7 +788,7 @@ At(P, a)
 
 `In(P, D)` 表示每一点（14.9），二者不得互相替代。
 
-否定存在与穷尽的时间窗通常是“某一时刻”：“狼出来之前没有狼在场”写成 Virtual 锚点 a、`Within(a, D)` 与 `At(Present(wolf), a)`；事件写成 `Within(start(e), D)`（13.1）。
+否定存在与穷尽的时间窗通常是“某一时刻”：“狼出来之前没有狼在场”写成 Virtual 锚点 a、`Within(a, D)` 与 `At(Present(wolf), a)`；事件写成 `Within(start(e), D)`（13.1）。问句的时间窗要蕴含模式的时间窗，否则排除不了它（13.1）。
 
 ### 14.5 Duration
 
@@ -959,7 +1007,7 @@ Commons 没有状态惯性：已开始的状态不默认持续，结束的状态
 8. 事件的开始、结束、内部锚点的 API；`start(e)`、`end(e)`、`duration(e)` 的正式形式（锚点是 Node，14.10）。
 9. Duration 的构造形式（时间集合运算已由 14.5 规定）。
 10. 模糊时间距离的值表示。
-11. `Next`（严格的下一个，其间没有其他事件）与 `Nth`（对符合某 Virtual 模式的 Event，按指定锚点的时间顺序取第 n 个）的定义。
+11. 序数的其他形式，例如倒数第 n 个、按内部锚点排序（`Nth` 与 `Next` 已由 10.5 定义）。
 12. 某些领域认知是否需要显式的持续规则（14.12）。
 13. 非 `OK` 时 `result` 与候选值的数据结构（7.3）。
 14. lint 的完整集合：只包括结构错误、字段错误与无法解释的声明。

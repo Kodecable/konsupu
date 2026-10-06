@@ -70,16 +70,27 @@ export class Thirsty extends Fact {
 export class Hungry extends Fact {
   static BRAND = Brand("commons:test:Hungry:v1");
 }
+// A rule reading a field's class: a dropping is never deliberate. Is sees
+// every description of a correspondence group (Engine/Groups.js). The rule
+// is what the class means (DEFINITIONAL, Solve/Definitions.js).
+export class Deliberate extends Fact {
+  static BRAND = Brand("commons:test:Deliberate:v1");
+  static DEFINITIONAL = true;
+  static Judge(api) {
+    return api.Is("action", Drop) ? false : null;
+  }
+}
 // A stub: reaching it while solving gives NoMethod (7.3).
 export class Pending extends Fact {
   static BRAND = Brand("commons:test:Pending:v1");
   static NO_METHOD = true;
 }
 
-// Strict narrative succession of two Events. Next is left to the domain by
-// the draft (16 item 11); its own rule derives Before(a, b) (section 9).
-export class Next extends Fact {
-  static BRAND = Brand("commons:test:Next:v1");
+// Narrative succession of two Events, "a, then b": a domain relation whose
+// own rule derives Before(a, b) (section 9). Commons' Next (10.5) is about
+// the order of a pattern's instances instead.
+export class Then extends Fact {
+  static BRAND = Brand("commons:test:Then:v1");
   static Derive(api, emit) {
     const earlier = api.Field("earlier");
     emit(Before, { earlier, later: api.Field("later") });

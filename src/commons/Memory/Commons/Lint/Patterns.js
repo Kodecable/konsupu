@@ -1,5 +1,5 @@
 // Pattern structure (6.2, 6.4, 10.2, 10.3): what Virtual and Among may
-// modify, the heads of NoInstance and Only, plain Nodes referencing Virtual
+// modify (Event anchors go with their Event, 11.2), the heads of NoInstance and Only, plain Nodes referencing Virtual
 // ones, and pattern Nodes outside the consumer's Situation chain.
 import {
   Proposition,
@@ -10,9 +10,11 @@ import {
 } from "../../../Interface/Nodes.js";
 import { Fields, NodesIn } from "../Model/Graph.js";
 import { IsPatternField } from "../Model/Schema.js";
+import { IsEventAnchor } from "../Model/Index.js";
 import { Assertion, Declaration } from "../Vocabulary/Base.js";
 import { Among, Validity, Virtual } from "../Vocabulary/Links.js";
 import { NoInstance, Only } from "../Vocabulary/Logic.js";
+import { Nth, Next } from "../Vocabulary/Ordinals.js";
 import { Component, OrdinaryReach, ReachesVirtual } from "../Engine/Pattern.js";
 import { Where } from "./Lint.js";
 import { Describe } from "./Fields.js";
@@ -34,6 +36,17 @@ function CheckDeclarations(index) {
         "Fix: modify the Entity, Event or anchor the pattern is about."
       );
     }
+    if (node instanceof Virtual && IsEventAnchor(node.node)) {
+      // Declared on its own, the anchor would be a pattern position apart
+      // from its Event, and the Event's own time would no longer bind it.
+      return (
+        "Virtual does not modify an Event anchor (6.4, 11.2): " +
+        `${Where(index, node)} modifies ${Where(index, node.node)}. The ` +
+        "anchors of a Virtual Event are Virtual with it. Fix: drop this " +
+        "Virtual and declare it on the Event; for some moment of a time, " +
+        "use a Virtual TimeAnchor a with Within(a, D)."
+      );
+    }
     if (!(node instanceof Among)) continue;
     if (index.IsVirtual(node.node)) {
       return (
@@ -51,10 +64,14 @@ function CheckDeclarations(index) {
     }
     described.add(node.node);
   }
-  for (const node of [...index.OfType(NoInstance), ...index.OfType(Only)]) {
+  const quantifiers = [NoInstance, Only, Nth, Next].flatMap((Type) => {
+    return index.OfType(Type);
+  });
+  for (const node of quantifiers) {
+    if (node instanceof Next && node.of === void 0) continue;
     if (!index.IsExplicitVirtual(node.of)) {
       return (
-        "The head of a quantifier is a Virtual Node (10.2, 10.3): " +
+        "The head of a quantifier is a Virtual Node (10.2, 10.3, 10.5): " +
         `${Where(index, node)} field "of" names ` +
         `${Describe(index, node.of)}. Fix: declare Virtual on it.`
       );

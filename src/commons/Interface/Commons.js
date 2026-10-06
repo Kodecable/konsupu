@@ -27,6 +27,7 @@ export {
   Only,
   SameReferent,
 } from "../Memory/Commons/Vocabulary/Logic.js";
+export { Nth, Next } from "../Memory/Commons/Vocabulary/Ordinals.js";
 export {
   TimeAnchor,
   InnerAnchor,

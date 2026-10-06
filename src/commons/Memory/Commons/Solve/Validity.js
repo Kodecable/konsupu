@@ -17,7 +17,8 @@
 //
 // A side that consulted anchors whose order conflicts (a cycle through a
 // strict edge) rests on contradictory knowledge: whatever either side then
-// concludes is Ambiguous, exposing the translation error (8.4, 14.7).
+// concludes is Ambiguous, exposing the translation error (8.4, 14.7). An
+// Ambiguous result carries the reasons found (Engine/Conflicts.js).
 import { Status, StatusSignal } from "../Model/Result.js";
 import { NewEnv, Side } from "../Engine/Terms.js";
 import { Flatten } from "../Engine/Normalize.js";
@@ -25,6 +26,7 @@ import { NewContext } from "../Engine/Context.js";
 import { PatternVariables, ReachesVirtual } from "../Engine/Pattern.js";
 import { Proves, Refuted } from "../Engine/Refute.js";
 import { FreeVariables } from "./Terms.js";
+import { Describe, Reasons } from "../Engine/Conflicts.js";
 
 export function SolveValidity(world, validity) {
   try {
@@ -58,7 +60,12 @@ function Judge(world, validity) {
   const refuted = Refuted({ items, virtuals, free }, env, refute);
   const conflict = prove.flags.conflict || refute.flags.conflict;
   if ((proven && refuted) || (conflict && (proven || refuted))) {
-    return { status: Status.Ambiguous, candidates: [true, false] };
+    const conflicts = Reasons(prove.flags, refute.flags, kb.ctx.flags);
+    if (conflicts.length === 0) {
+      const asked = Describe(world, proposition);
+      conflicts.push(`both ${asked} and its negation can be derived (8.4)`);
+    }
+    return { status: Status.Ambiguous, candidates: [true, false], conflicts };
   }
   const derived = kb.ctx.flags;
   if (proven) {

@@ -8,6 +8,7 @@
 // is exposed as Ambiguous rather than given (Solve/Validity.js, Solve/Among.js).
 import { PointsOf } from "./Points.js";
 import { Subset } from "./Sets.js";
+import { Describe, Note } from "../Engine/Conflicts.js";
 
 const LIMIT = 4;
 
@@ -23,7 +24,15 @@ export function Lt(order) {
 
 export function Compare(ctx, a, b) {
   const order = ctx.kb.Order().Compare(a, b);
-  if (order === "conflict") ctx.flags.conflict = true;
+  if (order === "conflict") {
+    ctx.flags.conflict = true;
+    const [left, right] = [a, b].map((p) => Describe(ctx.world, p));
+    Note(
+      ctx,
+      `the order of ${left} and ${right} conflicts: they lie on a cycle ` +
+        "through a strict edge (14.7)",
+    );
+  }
   return order;
 }
 

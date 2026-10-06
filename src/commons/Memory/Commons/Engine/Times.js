@@ -5,6 +5,7 @@ import { BindVar } from "./Fit.js";
 import { TimeOf } from "./Normalize.js";
 import { And, HasVar, ToTime, ExprValue } from "../Time/Points.js";
 import { Member, Subset, Disjoint } from "../Time/Sets.js";
+import { RuleFields } from "../Model/Schema.js";
 
 export function FactTime(fact, ctx) {
   if (fact.time === void 0 || fact.timeKb !== ctx.kb) {
@@ -58,8 +59,19 @@ export function* FitTimes(times, at, parts, env, factTime, ctx) {
   }
 }
 
-// Unbound anchor fields of a relation range over the known anchors.
-export function* BindPoints(term, side, keys, env, ctx) {
+// The unbound fields a class's Judge needs (Model/Schema.js RuleFields):
+// objects first, then anchors.
+export function* BindRule(term, side, Type, env, ctx) {
+  const { points, objects } = RuleFields(Type);
+  const scope = (inner) => inner.kb.Objects(inner);
+  for (const next of BindPoints(term, side, objects, env, ctx, scope)) {
+    yield* BindPoints(term, side, points, next, ctx);
+  }
+}
+
+// Unbound anchor fields of a relation range over the known anchors, or over
+// the values `pool` gives.
+export function* BindPoints(term, side, keys, env, ctx, pool = KnownPoints) {
   const key = keys.find((name) => {
     const field = FieldOf(term, name, side);
     return field !== null && IsVar(Deref(field[0], field[1], env, ctx)[0], env);
@@ -69,9 +81,9 @@ export function* BindPoints(term, side, keys, env, ctx) {
     return;
   }
   const [variable] = Deref(...FieldOf(term, key, side), env, ctx);
-  for (const point of KnownPoints(ctx)) {
+  for (const point of pool(ctx)) {
     for (const next of BindVar(variable, point, side, env, ctx)) {
-      yield* BindPoints(term, side, keys, next, ctx);
+      yield* BindPoints(term, side, keys, next, ctx, pool);
     }
   }
 }

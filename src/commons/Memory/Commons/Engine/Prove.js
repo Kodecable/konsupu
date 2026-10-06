@@ -10,8 +10,9 @@ import { OpenCount } from "./Open.js";
 import { BindVar, FitFields } from "./Fit.js";
 import { Flatten } from "./Normalize.js";
 import { MakeApi } from "./Api.js";
-import { BindPoints, FactTime, FitTimes } from "./Times.js";
+import { BindRule, FactTime, FitTimes } from "./Times.js";
 import { ProveNot } from "./Negation.js";
+import { Describe, Note } from "./Conflicts.js";
 
 export class Budget extends Error {
   constructor() {
@@ -54,15 +55,26 @@ function* SolveItem(item, env, ctx) {
     yield* Scan(term, side, item, env, ctx, Type);
     return;
   }
-  for (const next of BindPoints(term, side, Type.POINTS ?? [], env, ctx)) {
+  for (const next of BindRule(term, side, Type, env, ctx)) {
     const verdict = Type.Judge(MakeApi(term, side, next, ctx, null));
+    // A held fact the rule judges false still holds: the knowledge then
+    // conflicts, and the refutation side makes it Ambiguous.
     if (verdict === true) yield next;
     else if (verdict === null) yield* Scan(term, side, item, next, ctx, Type);
+    else yield* Scan(term, side, item, next, ctx, Type, Judged(ctx, Type));
   }
 }
 
-// Held facts the judged term fits, with a fitting time.
-function* Scan(term, side, item, env, ctx, Type) {
+function Judged(ctx, Type) {
+  return (fact) => {
+    const held = Describe(ctx.world, fact.term);
+    Note(ctx, `${held} is held, and ${Type.name}.Judge judges it false (8.4)`);
+  };
+}
+
+// Held facts the judged term fits, with a fitting time; `noting` hears of
+// each fact used.
+function* Scan(term, side, item, env, ctx, Type, noting = null) {
   const facts = [...ctx.kb.FactsOf(Type), ...ctx.extras];
   for (const fact of facts) {
     if (!IsA(fact.term, Type)) continue;
@@ -78,6 +90,7 @@ function* Scan(term, side, item, env, ctx, Type) {
         ? [fitted]
         : FitTimes(item.times, 0, [], fitted, FactTime(fact, ctx), ctx);
       for (const next of timed) {
+        noting?.(fact);
         yield fact.extra ? { ...next, usedExtra: true } : next;
       }
     }

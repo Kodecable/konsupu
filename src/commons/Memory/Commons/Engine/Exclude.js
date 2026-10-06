@@ -82,12 +82,24 @@ export function Outside(head, among, body, ctx) {
 // Whether `member` is definitely not what the Virtual position describes:
 // a class it lacks, a field naming a distinct object, or a constraint of the
 // body that fails for it.
-function Exclude(position, member, body, ctx) {
-  if (!IsA(member, position.constructor)) return true;
-  for (const [key, value, side] of FieldsOf(
-    position,
-    Side(position.situated),
-  )) {
+export function Exclude(position, member, body, ctx) {
+  // A correspondence group has the classes and fields of all its
+  // descriptions (Groups.js).
+  if (!ctx.kb.Is(member, position.constructor)) return true;
+  const fields = FieldsOf(position, Side(position.situated));
+  for (const facet of ctx.kb.Facets(member)) {
+    if (Differs(fields, facet, ctx)) return true;
+  }
+  if (ctx.depth >= DEPTH || body.virtuals.length !== 1) return false;
+  const bound = Bind(NewEnv([position]), position, member);
+  const deeper = { ...ctx, depth: ctx.depth + 1, extras: [] };
+  return body.items.some((item) => RefuteItem(item, bound, deeper));
+}
+
+// Whether a written field of the position names something `member` is
+// known not to be.
+function Differs(fields, member, ctx) {
+  for (const [key, value, side] of fields) {
     const other = FieldOf(member, key, GROUND);
     if (other === null) continue;
     const [mine] = Deref(value, side, NewEnv(), ctx);
@@ -96,8 +108,5 @@ function Exclude(position, member, body, ctx) {
       return true;
     }
   }
-  if (ctx.depth >= DEPTH || body.virtuals.length !== 1) return false;
-  const bound = Bind(NewEnv([position]), position, member);
-  const deeper = { ...ctx, depth: ctx.depth + 1, extras: [] };
-  return body.items.some((item) => RefuteItem(item, bound, deeper));
+  return false;
 }

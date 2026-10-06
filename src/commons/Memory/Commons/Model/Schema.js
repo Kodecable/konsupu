@@ -9,7 +9,9 @@
 // - pattern: the field accepts a pattern (6.4); a Node reaching a Virtual Node
 //   through it consumes the pattern instead of joining it.
 // - variance: "co" (default) or "contra", the side that must be the more
-//   specific when two propositions of the class are compared (9.1).
+//   specific when two propositions of the class are compared (9.1); "exact"
+//   when each side must be as specific as the other (an ordinal counts the
+//   instances of exactly its pattern, 10.5).
 // - context: the field names a Situation used as a context; it must be root.
 // - kind: a structural expectation checked by the lint.
 //
@@ -60,7 +62,14 @@ export function IsContextField(Type, key) {
 }
 
 export function Variance(Type, key) {
-  return FieldSpec(Type, key)?.variance === "contra" ? "contra" : "co";
+  const variance = FieldSpec(Type, key)?.variance;
+  return variance === "contra" || variance === "exact" ? variance : "co";
+}
+
+// Unbound fields a class's Judge needs bound: anchors (POINTS) range over
+// the known anchors, objects (OBJECTS) over the objects in scope.
+export function RuleFields(Type) {
+  return { points: Type?.POINTS ?? [], objects: Type?.OBJECTS ?? [] };
 }
 
 // A class declares NO_METHOD when it is a stub: reaching it while solving

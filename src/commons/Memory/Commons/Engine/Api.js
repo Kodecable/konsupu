@@ -4,9 +4,10 @@
 // ask about time through these calls, so they never touch the solver's
 // internals.
 import { Event } from "../Vocabulary/Base.js";
-import { Deref, FieldOf, IsA, PENDING } from "./Terms.js";
+import { Deref, FieldOf, PENDING } from "./Terms.js";
 import { ToTime, ALL, UNKNOWN } from "../Time/Points.js";
 import * as Sets from "../Time/Sets.js";
+import * as Instances from "./Instances.js";
 
 const HANDLE = Symbol("commons:FieldHandle");
 
@@ -22,12 +23,19 @@ export function MakeApi(term, side, env, ctx, time) {
       if (field === null) return null;
       return Object.freeze({ [HANDLE]: true, term: field[0], side: field[1] });
     },
-    // The value of a written field, or undefined.
+    // The value of a written field, or undefined. An object is given by its
+    // representative (Engine/Groups.js): ask its class with Is.
     Value(key) {
       const field = FieldOf(term, key, side);
       if (field === null) return void 0;
       const [value] = Deref(field[0], field[1], env, ctx);
       return value === PENDING ? void 0 : value;
+    },
+    // Whether the value of a written field is of class Type by some of its
+    // descriptions; false when the field is not written.
+    Is(key, Type) {
+      const value = api.Value(key);
+      return value !== void 0 && ctx.kb.Is(value, Type);
     },
     ToTime(handle) {
       if (handle === null) return UNKNOWN;
@@ -41,7 +49,7 @@ export function MakeApi(term, side, env, ctx, time) {
     EventTime(handle) {
       if (handle === null) return null;
       const [event] = Deref(handle.term, handle.side, env, ctx);
-      if (event === PENDING || !IsA(event, Event)) return null;
+      if (event === PENDING || !ctx.kb.Is(event, Event)) return null;
       const start = ctx.kb.EventPoint(event, "start");
       return { k: "span", ps: [start, ctx.kb.EventPoint(event, "end")] };
     },
@@ -65,6 +73,23 @@ export function MakeApi(term, side, env, ctx, time) {
     },
     Disjoint(left, right) {
       return Sets.Disjoint(ctx, left, right);
+    },
+    // Pattern instances and Event order (Engine/Instances.js), for the
+    // ordinal rules. `handle` names a pattern head; null is every Event.
+    Instance(handle, value) {
+      const head = Instances.Head(handle, env, ctx);
+      return head === void 0 ? null : Instances.Instance(head, value, ctx);
+    },
+    Instances(handle) {
+      const head = Instances.Head(handle, env, ctx);
+      return head === void 0 ? [] : Instances.Instances(head, ctx);
+    },
+    Closure(handle) {
+      const head = Instances.Head(handle, env, ctx);
+      return head === void 0 ? null : Instances.Closure(head, ctx);
+    },
+    Earlier(x, y, kind = "start") {
+      return Instances.Earlier(x, y, kind, ctx);
     },
   };
   return api;

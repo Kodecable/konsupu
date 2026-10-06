@@ -3,49 +3,20 @@
 // subclass, and every field the general term writes is written by the
 // specific one and matches it. The specific term may write more fields. A
 // contravariant field swaps the sides; a pattern field compares patterns
-// (Subsume). Matching only ever proves: a failure is no answer, not a "no".
-// The generators yield every extended environment that satisfies the match.
-import { Proposition, Situation, Variable } from "../../../Interface/Nodes.js";
-import { IsNode, EqualValues } from "../Model/Graph.js";
+// (Subsume). Matching only ever proves: a failure is no answer, not a "no";
+// the generators yield every environment that satisfies the match.
+import { Proposition, Variable } from "../../../Interface/Nodes.js";
 import { IsPatternField, Variance } from "../Model/Schema.js";
 import { IsDuration, TimeSetOperation } from "../Vocabulary/TimeValues.js";
 import { AllTimeGlobal } from "../Vocabulary/Anchors.js";
 import { Bind, Deref, FieldOf, FieldsOf, IsA, IsVar } from "./Terms.js";
-import { Extends, Inst, PENDING, Side, TypeOf } from "./Terms.js";
+import { GROUND, Inst, PENDING, Side, TypeOf } from "./Terms.js";
 import { Subsume } from "./Subsume.js";
+import { Same } from "./Same.js";
 import { ToTime } from "../Time/Points.js";
 import { Subset } from "../Time/Sets.js";
 
-// Whether two terms (after Deref) name one thing: true, false, or null when
-// that is not known. Distinct contextual objects talk about distinct things
-// unless a correspondence says otherwise (1.1), which Deref has applied.
-export function Same(left, right, ctx) {
-  if (left === right) return true;
-  if (left instanceof Inst || right instanceof Inst) return null;
-  if (IsNode(left) && IsNode(right)) {
-    if (left instanceof Variable || right instanceof Variable) return null;
-    // Two references to one global name the same global.
-    if (IsGlobal(left) || IsGlobal(right)) {
-      return (
-        Extends(TypeOf(left), TypeOf(right)) &&
-        IsGlobal(left) &&
-        Extends(TypeOf(right), TypeOf(left)) &&
-        IsGlobal(right)
-      );
-    }
-    const index = ctx.world.index;
-    if (index.IsVirtual(left) || index.IsVirtual(right)) return null;
-    return false;
-  }
-  if (IsNode(left) || IsNode(right)) return false;
-  if (EqualValues(left, right)) return true;
-  const plain = (value) => value === null || typeof value !== "object";
-  return plain(left) && plain(right) ? false : null;
-}
-
-function IsGlobal(node) {
-  return node.situated === null && !(node instanceof Situation);
-}
+export { Same };
 
 export function IsTimeValue(value) {
   return (
@@ -70,15 +41,21 @@ export function* BindVar(variable, value, side, env, ctx) {
     yield Bind(env, variable, Ground(value, side));
     return;
   }
-  // A Virtual position: the value must fit its class and written fields,
-  // and distinct Virtual positions take distinct values (6.4, 9.1).
-  if (!IsA(value, variable.constructor)) return;
+  // A Virtual position: some description of the value must fit its class
+  // and written fields (a correspondence group has several, Groups.js), and
+  // distinct Virtual positions take distinct values (6.4, 9.1).
+  if (!ctx.kb.Is(value, variable.constructor)) return;
   for (const [other, bound] of env.bindings) {
     if (other === variable || !env.injective.has(other)) continue;
     if (Same(bound, value, ctx) === true) return;
   }
   const next = Bind(env, variable, Ground(value, side));
-  yield* FitFields(variable, Side(variable.situated), value, side, next, ctx);
+  const at = Side(variable.situated);
+  for (const facet of ctx.kb.Facets(value)) {
+    if (!IsA(facet, variable.constructor)) continue;
+    const read = facet === value ? side : GROUND;
+    yield* FitFields(variable, at, facet, read, next, ctx);
+  }
 }
 
 export function* FitTerm(general, gSide, specific, sSide, env, ctx) {
@@ -143,13 +120,20 @@ function* FitEach(fields, at, general, specific, sSide, env, ctx) {
   const other = FieldOf(specific, key, sSide);
   if (other === null) return;
   const Type = TypeOf(general);
-  let pair = [value, side, other[0], other[1]];
-  if (Variance(Type, key) === "contra")
-    pair = [pair[2], pair[3], pair[0], pair[1]];
-  const step = IsPatternField(Type, key)
-    ? Subsume(...pair, env, ctx)
-    : FitTerm(...pair, env, ctx);
-  for (const next of step) {
-    yield* FitEach(fields, at + 1, general, specific, sSide, next, ctx);
+  const pair = [value, side, other[0], other[1]];
+  const swapped = [pair[2], pair[3], pair[0], pair[1]];
+  const variance = Variance(Type, key);
+  const step = (sides, from) => {
+    return IsPatternField(Type, key)
+      ? Subsume(...sides, from, ctx)
+      : FitTerm(...sides, from, ctx);
+  };
+  const first = step(variance === "contra" ? swapped : pair, env);
+  for (const next of first) {
+    // An exact field fits both ways.
+    const both = variance === "exact" ? step(swapped, next) : [next];
+    for (const fitted of both) {
+      yield* FitEach(fields, at + 1, general, specific, sSide, fitted, ctx);
+    }
   }
 }

@@ -22,7 +22,7 @@ import {
   Person,
   Thing,
   Drop,
-  Next,
+  Then,
   Thirsty,
   Wolf,
   Present,
@@ -43,7 +43,7 @@ function Fable() {
     Occurred(t.input, drop);
     t.Hold(new Agent(t.s, { action: drop, actor: crow }));
     if (index > 0) {
-      t.Hold(new Next(t.s, { earlier: events[index - 1], later: drop }));
+      t.Hold(new Then(t.s, { earlier: events[index - 1], later: drop }));
     }
     events.push(drop);
   }
@@ -75,7 +75,7 @@ export function TestScale() {
   t.Among(new Agent(t.s, { action: d, actor: who }));
   // What came after the third drop?
   const after = t.Add(new Variable(t.s));
-  t.Among(new Next(t.s, { earlier: events[3], later: after }));
+  t.Among(new Then(t.s, { earlier: events[3], later: after }));
   // Was the crow thirsty at the end; was it thirsty at the start?
   const late = t.Validity(
     t.Add(new At(t.s, { proposition: thirst, anchor: finish })),

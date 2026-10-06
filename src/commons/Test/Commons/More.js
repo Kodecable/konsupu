@@ -16,7 +16,7 @@ import {
   NoInstance,
   end,
 } from "../../Interface/Commons.js";
-import { Person, Present, Drop, Next, Thirsty } from "./Lexicon.js";
+import { Person, Present, Drop, Then, Thirsty } from "./Lexicon.js";
 import { Story } from "./Harness.js";
 import { Line } from "./Time.js";
 
@@ -55,15 +55,15 @@ export function TestCoincidingAnchors() {
   t.Expect(x, "OK", c, "coinciding anchors are one");
 }
 
-// Section 9: a domain class's own rule. Next derives Before, and the time
+// Section 9: a domain class's own rule. Then derives Before, and the time
 // order makes it transitive.
 export function TestDomainRule() {
   const t = new Story();
   const [a, b, c] = ["put", "try", "think"].map((name) => {
     return t.Add(new Drop(t.s, { name }));
   });
-  t.Hold(new Next(t.s, { earlier: a, later: b }));
-  t.Hold(new Next(t.s, { earlier: b, later: c }));
+  t.Hold(new Then(t.s, { earlier: a, later: b }));
+  t.Hold(new Then(t.s, { earlier: b, later: c }));
   const asked = t.Add(new Before(t.s, { earlier: a, later: c }));
   t.Expect(t.Validity(asked), "OK", true, "put before think");
 }
