@@ -62,6 +62,8 @@ type Session interface {
 // Debugger is a Session that can run one agent alone, without publishing.
 type Debugger interface {
 	DebugInputTranslation(context.Context, string, base.Trace) (interaction.DebugInputResult, error)
+	DebugOutputTranslation(context.Context, interaction.DebugSource, base.Trace) (interaction.DebugOutputResult, error)
+	DebugLearning(context.Context, interaction.DebugLearningRequest, base.Trace) (interaction.DebugLearningResult, error)
 }
 
 type Service struct {
@@ -540,6 +542,26 @@ func (s *session) DebugInputTranslation(ctx context.Context, raw string, trace b
 		return interaction.DebugInputResult{}, errors.New("Application Session is closed")
 	}
 	return s.coordinator.DebugInputTranslation(ctx, raw, trace)
+}
+
+func (s *session) DebugOutputTranslation(ctx context.Context, source interaction.DebugSource, trace base.Trace) (interaction.DebugOutputResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		//lint:ignore ST1005 Application Session is a proper noun.
+		return interaction.DebugOutputResult{}, errors.New("Application Session is closed")
+	}
+	return s.coordinator.DebugOutputTranslation(ctx, source, trace)
+}
+
+func (s *session) DebugLearning(ctx context.Context, request interaction.DebugLearningRequest, trace base.Trace) (interaction.DebugLearningResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		//lint:ignore ST1005 Application Session is a proper noun.
+		return interaction.DebugLearningResult{}, errors.New("Application Session is closed")
+	}
+	return s.coordinator.DebugLearning(ctx, request, trace)
 }
 
 func (s *session) Close() error {

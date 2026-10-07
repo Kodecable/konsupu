@@ -67,23 +67,38 @@ func (a *Agent) LearnOutputGap(ctx context.Context, gap protocol.OutputTranslati
 }
 
 func (a *Agent) learn(ctx context.Context, kind string, gap any) (revision.ID, error) {
+	final, err := a.run(ctx, kind, gap, base.Trace{}, false)
+	if err != nil {
+		return "", err
+	}
+	published, ok := final.(revision.ID)
+	if !ok || published == "" {
+		//lint:ignore ST1005 Learning and Revision are proper nouns.
+		return "", errors.New("Learning ended without a published Revision")
+	}
+	return published, nil
+}
+
+// run is one Learning workflow. With dry set, finish() performs every check
+// but publishes nothing and ends the run with dryFinish.
+func (a *Agent) run(ctx context.Context, kind string, gap any, trace base.Trace, dry bool) (any, error) {
 	if a == nil || a.runner == nil || a.space == nil || a.repository == nil || a.tests == nil || a.references == nil {
 		//lint:ignore ST1005 Learning Agent is a proper noun.
-		return "", errors.New("Learning Agent is not configured")
+		return nil, errors.New("Learning Agent is not configured")
 	}
 	editor, err := a.space.Editor(cognitivespace.RoleLearning)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	baseRevision, err := a.repository.Current(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	payload, err := json.MarshalIndent(map[string]any{"kind": kind, "gap": gap}, "", "  ")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	finish := a.finishTool(baseRevision, kind)
+	finish := a.finishTool(baseRevision, kind, dry)
 	role := base.Role{
 		Instructions: learningInstructions,
 		Termination:  base.ToolTermination{},
@@ -94,24 +109,19 @@ func (a *Agent) learn(ctx context.Context, kind string, gap any) (revision.ID, e
 	}
 	tree, err := a.repository.WorkingTree(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	task := a.prompts.Task(ctx, a.runner, role, tree, spaceprompt.Learning,
 		map[string]any{"kind": kind, "gap": gap},
-		base.Task{Goal: "Repair the Cognition Space for this typed gap:\n\n" + string(payload)})
+		base.Task{Goal: "Repair the Cognition Space for this typed gap:\n\n" + string(payload), Trace: trace})
 	result, err := a.runner.Run(ctx, role, task)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	published, ok := result.Final.(revision.ID)
-	if !ok || published == "" {
-		//lint:ignore ST1005 Learning and Revision are proper nouns.
-		return "", errors.New("Learning ended without a published Revision")
-	}
-	return published, nil
+	return result.Final, nil
 }
 
-func (a *Agent) finishTool(expected revision.ID, kind string) base.Tool {
+func (a *Agent) finishTool(expected revision.ID, kind string, dry bool) base.Tool {
 	return base.Tool{
 		Definition: base.Descriptor("finish", "Ask the Host to validate, Test, and publish the current draft.", base.Schema(nil)),
 		Invoke: func(ctx context.Context, raw string) (base.Action, error) {
@@ -163,6 +173,12 @@ func (a *Agent) finishTool(expected revision.ID, kind string) base.Tool {
 				if err := a.prompts.Check(ctx, tree); err != nil {
 					return base.Action{}, base.VisibleError("The Learning draft has an invalid Interface/Prompt module.", err.Error())
 				}
+			}
+			if dry {
+				return base.Action{
+					Observation: base.Observation(map[string]any{"dry_run": true, "validated": true}, nil),
+					Final:       dryFinish{},
+				}, nil
 			}
 			published, err := a.repository.Publish(ctx, expected, revision.Publication{
 				Kind: revision.PublicationLearning, Summary: "learn " + kind,

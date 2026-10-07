@@ -25,6 +25,7 @@ import {
   TestFixtureDefer,
   TestFixtureDeferFailure,
   TestFixtureInputInvalid,
+  TestFixtureUnaddressed,
 } from "./FixtureEvaluation.js";
 // The Foundation self-test suite. The root Test.js runs it; a cognition
 // package built on Foundation runs it from its own root Test.js together with
@@ -57,6 +58,7 @@ export function FoundationSuite() {
   TestFixtureDefer();
   TestFixtureDeferFailure();
   TestFixtureInputInvalid();
+  TestFixtureUnaddressed();
   TestValidateInputOnce();
   TestValidateInputRejects();
   Assert(Evaluate([new Situation()]).length === 0, "no implicit imperative");

@@ -6,7 +6,6 @@ import {
   SituatedNode,
   Variable,
   Query,
-  Imperative,
 } from "../../../Interface/Nodes.js";
 import { Assertion, Declaration, Event } from "../Vocabulary/Base.js";
 import { TimeAnchor } from "../Vocabulary/Anchors.js";
@@ -24,7 +23,7 @@ export function IsObject(index, node) {
   if (!(node instanceof SituatedNode)) return false;
   if (node instanceof Proposition || node instanceof Declaration) return false;
   if (node instanceof Assertion || node instanceof Variable) return false;
-  if (node instanceof Query || node instanceof Imperative) return false;
+  if (node instanceof Query) return false;
   return !index.IsVirtual(node) && index.AmongOf(node) === null;
 }
 

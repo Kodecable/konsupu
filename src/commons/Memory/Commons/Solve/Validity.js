@@ -7,8 +7,10 @@
 //   no way to judge P          NoMethod
 //
 // When P reaches a Virtual Node, the judged body is P's pattern component and
-// the question is whether an instance exists (10.1). Free Variables in P are
-// existential: they may take values inside the proof but are not written.
+// the question is whether an instance exists (10.1). A Variable in P that an
+// Among or Corresponds decides has that value, queried or not (6.2, 7.3);
+// the other free Variables are existential: they may take values inside the
+// proof but are not written.
 //
 // Proof and refutation each have their own step budget. A side that stopped
 // at a limit, or a knowledge base whose derivation did, may have missed what
@@ -48,13 +50,19 @@ function Judge(world, validity) {
     : null;
   const virtuals = pattern === null ? [] : PatternVariables(index, pattern);
   const sources = pattern === null ? [proposition] : pattern.constraints;
+  const scopeOf = (source) => {
+    return source === proposition ? validity.situated : source.situated;
+  };
   const free = [
-    ...new Set(sources.flatMap((source) => FreeVariables(world, source))),
+    ...new Set(
+      sources.flatMap((source) => {
+        return FreeVariables(world, source, scopeOf(source));
+      }),
+    ),
   ];
   const env = NewEnv([...virtuals, ...free], virtuals);
   const items = sources.flatMap((source) => {
-    const scope = source === proposition ? validity.situated : source.situated;
-    return Flatten(source, Side(scope), [], env, prove, []);
+    return Flatten(source, Side(scopeOf(source)), [], env, prove, []);
   });
   const proven = Proves(items, env, prove);
   const refuted = Refuted({ items, virtuals, free }, env, refute);

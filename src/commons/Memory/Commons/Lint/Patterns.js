@@ -6,7 +6,6 @@ import {
   SituatedNode,
   Variable,
   Query,
-  Imperative,
 } from "../../../Interface/Nodes.js";
 import { Fields, NodesIn } from "../Model/Graph.js";
 import { IsPatternField } from "../Model/Schema.js";
@@ -23,7 +22,7 @@ function Contextual(node) {
   if (!(node instanceof SituatedNode)) return false;
   if (node instanceof Proposition || node instanceof Declaration) return false;
   if (node instanceof Assertion || node instanceof Variable) return false;
-  return !(node instanceof Query || node instanceof Imperative);
+  return !(node instanceof Query);
 }
 
 function CheckDeclarations(index) {

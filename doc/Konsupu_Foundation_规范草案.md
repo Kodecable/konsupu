@@ -119,7 +119,7 @@ Node 自身只负责共同存储。situated 的具体约束由下述 SituatedNod
 
 ### 2.2 SituatedNode
 
-SituatedNode 表示必须归属于 Situation 的认知。Variable、Proposition、Query、Imperative 均从它派生。
+SituatedNode 表示必须归属于 Situation 的认知。Variable、Proposition、Query 均从它派生；Imperative 是 Proposition 的抽象子类。
 
 约束：抽象，不得直接实例化；构造要求 `situated` 是 Situation。
 
@@ -204,11 +204,13 @@ KonsupuIdentity 表示使用当前认知的 Konsupu 本身，使用 `KonsupuIden
 
 ### 2.9 Imperative
 
-Imperative 表示需要被做的明确祈使。只有 addressee 在 Foundation 类型语义上属于 KonsupuIdentity 的对象，才进入当前 Konsupu 祈使适用性判断。
+Imperative 是抽象 Proposition，表示“要求 addressee 做某事”这一认知。它与其他 Proposition 一样只提供一个可以被讨论的对象：出现在 Input 中不等于要求成立，也不说明要求以何种方式提出。
+
+具体 subclass 以数据成员 `addressee` 保存被要求者；要求的内容及其他角色由领域定义。未写 `addressee` 的 Imperative 不成为候选（3.4）。
 
 合法 Input 可以没有 Imperative。不在本草案中推测隐含祈使或规定聆听时必须回应。
 
-约束：concrete 且 final；必须声明提及，范围是 addressee 与 content。
+约束：抽象；`addressee` 若写出，必须是数据成员。具体领域 subclass 与 Proposition 的相同：必须自己声明 BRAND 并声明提及，默认 final。
 
 实现：`Memory/Foundation/Imperative.js`。
 
@@ -300,7 +302,7 @@ Foundation 不分析 Variable 之间的取值依赖，也不为满足依赖调�
 
 ### 3.4 Imperative Discovery
 
-按 Input 顺序收集 addressee 为 `KonsupuIdentity` 的候选 Imperative，再逐个调用 `IsKonsupuImperativeApplicable`。
+按 Input 顺序收集 addressee 为 `KonsupuIdentity` 的候选 Imperative，再逐个调用 `IsKonsupuImperativeApplicable`。候选只按 Input occurrence 与 addressee 的类型收集，不看它是否被断言或位于哪个 Situation。
 
 该入口只判断候选是否在当前 Situation 关系下真正构成对 Konsupu 的祈使，不代替稳定身份，也不猜测未明确指向 Konsupu 的意图。
 

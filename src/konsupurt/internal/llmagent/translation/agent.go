@@ -116,7 +116,7 @@ func (a *OutputAgent) Translate(ctx context.Context, request OutputRequest) (tra
 		),
 	}
 	task := a.prompts.Task(ctx, a.runner, role, request.Tree, spaceprompt.OutputTranslate,
-		map[string]any{"mutated": request.Mutated}, base.Task{Goal: goal})
+		map[string]any{"mutated": request.Mutated}, base.Task{Goal: goal, Trace: request.Trace})
 	result, err := a.runner.Run(ctx, role, task)
 	if err != nil {
 		return OutputResult{}, err

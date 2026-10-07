@@ -94,7 +94,7 @@ func TestFinishAbortsOnSnapshotFailure(t *testing.T) {
 					tests.contractErr = errors.New("invalid Resolve export")
 				}
 				agent := NewAgent(nil, space, repository, tests, nil)
-				_, err := agent.finishTool("initial", "input_translation_gap").Invoke(context.Background(), `{}`)
+				_, err := agent.finishTool("initial", "input_translation_gap", false).Invoke(context.Background(), `{}`)
 				var abort *base.AbortError
 				if !errors.As(err, &abort) {
 					t.Fatalf("snapshot failure did not abort Learning: %v", err)

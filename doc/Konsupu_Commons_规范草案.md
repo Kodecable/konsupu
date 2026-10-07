@@ -421,7 +421,7 @@ Validity(situated=..., proposition=P, variable=v)
 
 **定义性规则。** 类可以声明它的判定规则是定义性的：规则只由该 Proposition 自己的字段（字段值的 class 与值）决定，是这个 class 含义的一部分，例如“偶然发生的事不为任何目的”。不属于任何语境的 Situation（它的 root 不被 `content` 等字段引用为语境，12）中被断言、又被定义性规则判为不成立的 Proposition 是输入错误，不论问的是什么，由 Input Translation 修复：通常是把某人说的、相信的内容断言在了世界中，或选错了 class。语境中的内容可以不自洽（说谎、糊涂的信念），在语境中判断时仍按上表得到 `Ambiguous`。依赖其他认知的规则（先后、计数等）不是定义性的，与断言矛盾时得到 `Ambiguous`。
 
-P 中可以含有没有被 Query 的 Variable。求解器可以在内部为它们取得值以完成推导，但不写入；只有被 Query 的 Variable 得到结果。
+P 中可以含有没有被 Query 的 Variable。被 `Among` 或 `Corresponds` 决定的 Variable 只有一个值（7.3），P 按这个值判断（6.2），不论它是否被 Query、是否与 `Validity` 的 `variable` 在同一个 Query 中。`Validity` 的 `variable` 是 P 的成立性，不能再由 `Among`、`Corresponds` 或另一个 `Validity` 决定，违反者为 lint 错误。没有声明决定的 Variable 是存在量化的：求解器可以在内部为它们取得值以完成推导，但不写入。只有被 Query 的 Variable 得到结果。
 
 例如“那只狼在场吗”：
 
@@ -668,6 +668,25 @@ story
 ```
 
 内容中的命题需要按描述找出时，用 `Among(node=模式, situation=claim)`（6.2）。
+
+### 12.3 请求
+
+`Requests` 是 Foundation `Imperative` 的具体类，表示 `requester` 要求 `addressee` 回答内容中的问句。它与其他认知一样是普通 Proposition，按同样的方式书写和断言；向 Konsupu 提问与叙述中“农夫要狐狸回答”同构，只有 `addressee` 不同：
+
+```text
+world
+|- ask = Situation(world)
+|  |- v = Variable
+|  |- Validity(proposition=P, variable=v)
+|  |- Query(v)
+|- Assert(Requests(addressee=KonsupuIdentity, content=ask))
+```
+
+**请求不是言语。** `Says` 只表示说了什么；祈使是独立的认知，可以附在一次言语上，也可以单独出现。由说话提出的请求以 `utterance` 字段指向那个 `Says`。
+
+**内容不是语境。** `content` 是被问的 Situation，不是谁持有的认知，因此不受 12 中“语境必须是 root”的约束。它必须是问句在其中判断的 Situation 的细化（子孙），这样问句看得见那里的认知：通常是请求所在的 Situation；要在某个语境中判断时（“狐狸是否认为……”“狐狸是否说过……”），是那个语境（被 `content` 等语境字段引用的 root）。其中至少要有一个 Query。在语境中判断的问句问的是语境的内容：被问的命题中不得再有以该语境为语境的认知（例如在狐狸的信念中问“狐狸是否相信这个信念”）。语境彼此隔离，没有从语境内部审视它自己的规则，这样的问句在构造上无法判断。故事一侧的语境内容可以指回自身（“我告诉你……”）。问句中直接创建的普通 Entity、Event 或时间锚点是问句 Situation 中的新对象（1.2），与故事中的任何对象都不对应，关于它的判断只能是未知；因此在请求的内容及其下，它们必须是 `Among` 描述、Virtual 模式或 `Corresponds` 的一侧（事件锚点随事件）。违反者为 lint 错误。本版内容只有问句；要求去做某事的请求（例如以模式表示的 deed）未定义。
+
+**回答。** 指向 Konsupu 的请求由 `IsKonsupuImperativeApplicable` 判断是否适用（Foundation 3.4、4.4）；适用的请求，内容中每个决定了被 Query 的 Variable 的声明产出一个文字 Output。这段文字是一句陈述：状态词加上把 Variable 换成值之后的声明内容。被另一个问句读到的声明不单独产出，它的值写进那个问句的陈述里。在语境中判断的问句，陈述写明是哪个认知的语境（例如“在狐狸所说的话中成立”），因为它说的是该语境持有什么，不是事实。没有内容的请求是叙述，不是 lint 错误；但指向 Konsupu 时无从回答，是输入错误。
 
 ---
 
@@ -991,7 +1010,7 @@ Commons 没有状态惯性：已开始的状态不默认持续，结束的状态
     包含判定（9.1）
 ```
 
-`Believes`、`Says`、`Plans`、`Fears`、`Occurs`、`Agent`、`Causes`、`Unable`、`Forbids`、`Mandates`、`Habitual`、`Goal`、`Promises`、`Failed` 等都是普通认知，通过类、字段与自己的推导规则接入，不改变求解器的结构。
+`Believes`、`Says`、`Requests`、`Plans`、`Fears`、`Occurs`、`Agent`、`Causes`、`Unable`、`Forbids`、`Mandates`、`Habitual`、`Goal`、`Promises`、`Failed` 等都是普通认知，通过类、字段与自己的推导规则接入，不改变求解器的结构。
 
 ---
 
@@ -1013,6 +1032,8 @@ Commons 没有状态惯性：已开始的状态不默认持续，结束的状态
 14. lint 的完整集合：只包括结构错误、字段错误与无法解释的声明。
 15. 包含判定第 4 条中“可以推出”所使用的推导规则范围（9.1）。
 16. `Among` 选中被 `NoInstance` 声明不存在的 Virtual Node 时的结果：差异还是冲突（6.2）。
+17. 指向 Konsupu 的请求何时适用：故事、信念或他人话语中的请求，以及带时间的请求（12.3）。本版对每个候选都判为适用。
+18. 要求去做某事的请求（12.3）。
 
 ---
 

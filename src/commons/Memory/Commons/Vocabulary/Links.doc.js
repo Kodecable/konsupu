@@ -13,6 +13,8 @@ export const DOCS = {
       variable: "the Variable to Query; its result is true or false",
     },
     notes: [
+      "A declaration: push it into Input, never Assert it.",
+      "Push P (and what it references) before the Validity, without Assert: P is asked, not held.",
       "true when P derives, false when Not(P) derives, else Unknown; both: Ambiguous.",
       'Translate with the question\'s polarity: "can X?" is Not(Unable(...)).',
       "A state true only for a while needs In or At in P (14.7).",

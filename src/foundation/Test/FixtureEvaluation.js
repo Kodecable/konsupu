@@ -4,7 +4,6 @@ import {
   Variable,
   Proposition,
   Query,
-  Imperative,
   KonsupuIdentity,
   ReportDataMembers,
 } from "../Interface/Nodes.js";
@@ -16,6 +15,7 @@ import { ResolveQuery } from "./Fixtures/ResolveQuery.js";
 import { ResolveQueryDefer } from "./Fixtures/ResolveQueryDefer.js";
 import { IsKonsupuImperativeApplicable } from "./Fixtures/IsKonsupuImperativeApplicable.js";
 import { ResolveImperatives } from "./Fixtures/ResolveImperatives.js";
+import { TestImperative } from "./Fixtures/TestImperative.js";
 class FixtureProposition extends Proposition {
   static BRAND = Brand("foundation:test:FixtureProposition:v1");
   ReportReferences(visit) {
@@ -37,8 +37,9 @@ export function TestFixtureEvaluation() {
     operands: [20, 22],
   });
   const query = new Query(situation, [variable]);
-  const imperative = new Imperative(situation, KonsupuIdentity.Ref(), {
-    value: variable,
+  const imperative = new TestImperative(situation, {
+    addressee: KonsupuIdentity.Ref(),
+    content: { value: variable },
   });
   const outputs = Evaluate(
     [situation, variable, relation, query, imperative],
@@ -59,8 +60,9 @@ export function TestFixtureDefer() {
     operands: ["from-defer"],
   });
   const query = new Query(situation, [variable]);
-  const imperative = new Imperative(situation, KonsupuIdentity.Ref(), {
-    value: variable,
+  const imperative = new TestImperative(situation, {
+    addressee: KonsupuIdentity.Ref(),
+    content: { value: variable },
   });
   const outputs = Evaluate(
     [situation, variable, relation, query, imperative],
@@ -102,4 +104,18 @@ export function TestFixtureInputInvalid() {
   );
   RequireInput(true, "a held condition passes");
   Reject(() => RequireInput(false, ""), "RequireInput reason", TypeError);
+}
+export function TestFixtureUnaddressed() {
+  // Only an Imperative whose written addressee is KonsupuIdentity is a
+  // candidate: neither of these reaches the applicability entry, which would
+  // fail on their content.
+  const situation = new Situation();
+  const content = { mode: "invalid-applicability" };
+  const unwritten = new TestImperative(situation, { content });
+  const other = new TestImperative(situation, {
+    addressee: situation,
+    content,
+  });
+  const outputs = Evaluate([situation, unwritten, other], operations);
+  Assert(outputs.length === 0, "only Konsupu-addressed candidates");
 }

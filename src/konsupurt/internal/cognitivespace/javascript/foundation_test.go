@@ -96,6 +96,10 @@ class TestProposition extends Proposition {
   static BRAND = Brand("test:javascript:Proposition:v1");
   ReportReferences(visit) { ReportDataMembers(this, visit); }
 }
+class TestImperative extends Imperative {
+  static BRAND = Brand("test:javascript:Imperative:v1");
+  ReportReferences(visit) { ReportDataMembers(this, visit); }
+}
 const situation = new Situation();
 const variable = new Variable(situation);
 const constraint = new TestProposition(situation, {
@@ -118,8 +122,8 @@ func resolveFoundation(t *testing.T, interaction *Interaction, source string) (*
 func TestFoundationCrossContextQuestionAnswer(t *testing.T) {
 	_, interaction := foundationFixture(t, true)
 	output, err := resolveFoundation(t, interaction, foundationImports+`
-const ask = new Imperative(situation, KonsupuIdentity.Ref(),
-  { value: variable });
+const ask = new TestImperative(situation, { addressee: KonsupuIdentity.Ref(),
+  content: { value: variable } });
 export default [situation, variable, constraint, query, ask];`)
 	if err != nil {
 		t.Fatal(err)
@@ -178,8 +182,8 @@ func TestFoundationThirdPhaseUnresolvedReadRepairsInput(t *testing.T) {
 	_, interaction := foundationFixture(t, true)
 	_, err := resolveFoundation(t, interaction, foundationImports+`
 const unknown = new Variable(situation);
-const ask = new Imperative(situation, KonsupuIdentity.Ref(),
-  { value: unknown });
+const ask = new TestImperative(situation, { addressee: KonsupuIdentity.Ref(),
+  content: { value: unknown } });
 export default [situation, variable, constraint, query, unknown, ask];`)
 	var invalid *InputObjectInvalidError
 	if !errors.As(err, &invalid) {

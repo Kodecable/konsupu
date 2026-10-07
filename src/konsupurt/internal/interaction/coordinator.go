@@ -15,6 +15,10 @@ import (
 	"konsupurt/internal/llmagent/translation"
 )
 
+// emptyOutputAnswer stands in for Output Translation when Resolve returns
+// an empty Output[].
+const emptyOutputAnswer = "（无输出）"
+
 type Dependencies struct {
 	Space      *cognitivespace.Space
 	Revisions  revision.Repository
@@ -276,7 +280,7 @@ func (c *Coordinator) translateOutput(
 				if checkErr != nil {
 					return "", "", publications, checkErr
 				}
-				return "（无输出）", current, publications, nil
+				return emptyOutputAnswer, current, publications, nil
 			}
 		}
 		translated, err := c.dependencies.Output.Translate(ctx, translation.OutputRequest{

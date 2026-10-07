@@ -10,7 +10,7 @@ import (
 
 // A space prompt history may call the tools the agent has.
 func TestSpacePromptToolNamesMatchLearningTools(t *testing.T) {
-	names := base.ToolNames(append(learningFilesystemTools(nil, nil), (&Agent{}).finishTool("", "")))
+	names := base.ToolNames(append(learningFilesystemTools(nil, nil), (&Agent{}).finishTool("", "", false)))
 	slices.Sort(names)
 	want := slices.Clone(spaceprompt.Tools[spaceprompt.Learning])
 	slices.Sort(want)

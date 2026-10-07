@@ -34,14 +34,18 @@ class TestProposition extends Proposition {
   static BRAND = Brand("test:interaction:Proposition:v1");
   ReportReferences(visit) { ReportDataMembers(this, visit); }
 }
+class TestImperative extends Imperative {
+  static BRAND = Brand("test:interaction:Imperative:v1");
+  ReportReferences(visit) { ReportDataMembers(this, visit); }
+}
 const situation = new Situation();
 const variable = new Variable(situation);
 const relation = new TestProposition(situation, {
   result: variable, op: "sum", operands: [%d, %d]
 });
 const query = new Query(situation, [variable]);
-const imperative = new Imperative(situation, KonsupuIdentity.Ref(),
-  { value: variable });
+const imperative = new TestImperative(situation, { addressee: KonsupuIdentity.Ref(),
+  content: { value: variable } });
 globalThis.StructuredInput = [situation, variable, relation, query, imperative];
 export default StructuredInput;`, left, right))
 	if err != nil {

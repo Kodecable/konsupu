@@ -161,20 +161,64 @@ Foundation 自检主体位于 `Test/Suite.js` 的 `FoundationSuite()`，根 `Tes
 `Test()` 通过后，`konsupu test` 还会以样例 request 求值空间中存在的
 `Interface/Prompt/*.js`，并校验返回形状（见 v0.9 规范 Interface/Prompt 一节）。
 
-## 调试 Input Translation
+## 调试单个 Agent
 
-单独运行一次 Input Translation，观察 Agent 的工具调用轨迹与结果：
+`konsupu debug` 单独运行一个 Agent（或到它为止的前序阶段），观察工具调用轨迹与结果。
+三个子命令共用同一组保证和选项：
+
+- **需要真实 LLM 配置**：它们会调用模型。
+- **不改动空间**：Resolve 总是 dry run，改动随后还原，不发布 Revision，Gap 也
+  不会触发 Learning（`debug learning` 是例外，见下）。运行结束后空间回到起始
+  Revision。
+- **输出**：轨迹实时写到 stderr，多个 Agent 的阶段之间有 `== 阶段名 ==` 分隔行；
+  结果写到 stdout；`--json` 在结束时把 `{events, result}` 一次写到 stdout。
+
+### input-translate
 
 ```sh
 konsupu debug input-translate --space <space> --config <config.json> -- "<raw>"
 echo "<raw>" | konsupu debug input-translate --space <space> --config <config.json>
 ```
 
-- **需要真实 LLM 配置**：它会调用模型。
-- **不改动空间**：`finish()` 照常运行 Resolve，所以输入错误的返修反馈会回到
-  Agent；但 Resolve 的改动随后被还原，不发布 Revision，也不进入 Learning。
-- **输出**：轨迹实时写到 stderr，结果写到 stdout；`--json` 在结束时把
-  `{events, result}` 一次写到 stdout。
+`finish()` 照常运行 Resolve，所以输入错误的返修反馈会回到 Agent。
+
+### output-translate
+
+对 Resolve 返回的 Output 运行一次 Output Translation。Input 的来源二选一：
+
+```sh
+# 先由 Input Translation Agent 翻译 raw，再翻译输出
+konsupu debug output-translate --space <space> --config <config.json> -- "<raw>"
+# 直接给一个 JS 模块，跳过 Input Translation（省一次模型调用，便于反复调输出提示词）
+konsupu debug output-translate --space <space> --config <config.json> --input input.js
+```
+
+`--input` 的模块与 Agent 在 `js_eval` 里写的相同：可以 import 空间中的模块，并给
+`globalThis.StructuredInput` 赋值（Node[]）。Resolve 拒绝该 Input 时报错并说明原因。
+
+结果是答案，或 Output Translation Gap；如果前序阶段先停下（Input Translation
+Gap、Resolve 异常），则报告那一个。Resolve 的 Output 为空数组时，答案是占位文本
+`（无输出）`，不会调用 Agent，结果中会注明。
+
+### learning
+
+在一个 Gap 上运行 Learning Agent，但 `finish()` 只校验和 Test、不发布：
+
+```sh
+# 直接给出 Gap：{"kind": "...", "gap": {...}}，即 Learning Agent 收到的载荷
+konsupu debug learning --space <space> --config <config.json> --gap gap.json
+# 或者让 raw / --input 走完 Input 和 Output Translation，取它们遇到的第一个 Gap
+konsupu debug learning --space <space> --config <config.json> -- "<raw>"
+```
+
+`kind` 取 `input_translation_gap`、`output_translation_gap`、
+`resolve_exception_gap`、`resolve_no_persistence_gap` 之一；`gap` 按协议校验，
+未知字段会被拒绝。用 raw 找 Gap 时，如果输入没有产生任何 Gap（Output
+Translation 已经给出答案）则报错。
+
+结果列出 Agent 对空间做的每个文件改动（added / modified / removed）及其 diff，
+并说明 `finish()` 是否通过了发布前的全部检查（即真实运行会不会发布这些改动）。
+这些改动随后被丢弃；即使 Agent 没跑到 `finish()`，也能看到它写到一半的草稿。
 
 ## Foundation 的求值组织
 
@@ -226,7 +270,7 @@ Input 侧统一从 `Interface/Nodes.js` 导入类型和 `ref`；Output 侧从
 | `new Variable(situated, fields = {})` | 待求解变量；具体类且不可继承；值保存在本轮 effect 中，不写入变量本体 |
 | `Proposition` | 抽象命题节点；领域类型必须继承并声明 BRAND |
 | `new Query(situated, variables)` | 要求变量并登记 export；`variables` 为 Variable 数组，约束由独立认知表达；global 引用与从 `ref` 的返回值上读取成员而得到的 Variable 只能作为提及，不能列入；重复项忽略，但同一 Situation 中经不同来源指向同一对象的项（例如同时列出 `v` 与 `ref(child, v)`）属输入构造错误 |
-| `new Imperative(situated, addressee, content)` | 祈使节点；领域代码解释 content |
+| `Imperative` | 抽象祈使命题，继承 Proposition；具体类以数据成员 `addressee` 保存被要求者，其余字段由领域定义；未写 `addressee` 的不成为候选 |
 | `KonsupuIdentity.Ref()` | 指向当前 Konsupu 的全局引用，常作为 addressee |
 | `ConcreteGlobalNode.Ref()` | 自定义 GlobalNode 子类的全局引用；不能直接构造全局节点 |
 | `ref(sourceSituation, variable)` | 从允许的来源导入变量；sourceSituation 必须自己显式 Query 过 variable，使它进入自己的 exports |
@@ -255,9 +299,9 @@ occurrence 的全部数据成员完成，不依赖汇报；汇报的项也按同
 
 具体领域类可在构造器中调用 `Final(Type, new.target)` 保持 final。
 
-具体语义类默认 final：`Situation`、`Variable`、`Query`、`Imperative`、
-`TextOutput`、`KonsupuIdentity` 不可再继承；抽象类别 `Node`、`SituatedNode`、
-`GlobalNode`、`Proposition`、`Output` 可以继续派生。occurrence 中只有
+具体语义类默认 final：`Situation`、`Variable`、`Query`、`TextOutput`、
+`KonsupuIdentity` 不可再继承；抽象类别 `Node`、`SituatedNode`、`GlobalNode`、
+`Proposition`、`Imperative`、`Output` 可以继续派生。occurrence 中只有
 `Situation` 的 `situated` 可为 null。
 
 ### 五个领域实现入口

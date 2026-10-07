@@ -115,7 +115,7 @@ Foundation 以独立目录保存，复制后作为普通认知空间的基础。
 
 其他 Node 不允许有 Effect；运行时算法状态只能放在局部变量或闭包中，且领域不得跨调用累积状态（见第 12 节）。
 
-`Node`、`SituatedNode`、`GlobalNode`、`Proposition`、`Output` 是 abstract semantic category，可以继续派生。concrete semantic class 默认 final，不允许继续继承。`Variable` 是 concrete 且为 final，可直接 `new Variable(...)`。每个 semantic subclass 必须自己声明 `static BRAND`。occurrence 中只有 `Situation` 的 `situated` 可为 null；`GlobalNode` 不进入 Input。
+`Node`、`SituatedNode`、`GlobalNode`、`Proposition`、`Imperative`、`Output` 是 abstract semantic category，可以继续派生。concrete semantic class 默认 final，不允许继续继承。`Variable` 是 concrete 且为 final，可直接 `new Variable(...)`。每个 semantic subclass 必须自己声明 `static BRAND`。occurrence 中只有 `Situation` 的 `situated` 可为 null；`GlobalNode` 不进入 Input。
 
 Variable 不是另一种领域值，而是 Situation-relative symbolic reference；其 value 可以是任意 JSValue，包括 Node 与 `ref` 的返回值，但**不能是裸 Variable**。这条禁令把值引用限制成必定带来源的 ref：裸 Variable 作为 value 不携带导入边，读取时必须在它自己的 Situation 与视角所属 Situation 之间二选一，结构扫描也无从检查这条流转；禁止之后值链只能由 ref 构成，链上下一个槽位始终由 `FindSource` 单独判定。要表达"某变量的值是另一个变量"，使用 `ref(source, variable)`：ref 可以正常作为 value，并与其它 ref 连成多节点链条，读取时沿这条链继续读取。赋值点只检查 value 顶层，嵌套在 value 内部的裸 Variable 同样禁止但只作约定（见第 14 节）。在赋值点（`AssignLocalVariable`，也是唯一的写入点）违反此约束属领域实现错误，抛 `TypeError`，不进入输入修复流程。Variable 的 value 只存在于本轮 effect，不改变任何 Node 的 identity；Variable 在 JS 层也不伪装成它的 value。
 

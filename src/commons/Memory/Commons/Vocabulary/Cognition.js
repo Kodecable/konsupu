@@ -5,6 +5,7 @@
 // when the held deed must be more specific, "contra" when the judged one must.
 import {
   Brand,
+  Imperative,
   Proposition,
   ReportDataMembers,
 } from "../../../Interface/Nodes.js";
@@ -64,6 +65,25 @@ export class Believes extends Cognition {
 export class Says extends Cognition {
   static BRAND = Brand("commons:Says:v1");
   static FIELDS = { speaker: {}, addressee: {}, content: { context: true } };
+}
+// A request (Foundation's Imperative): `requester` asks `addressee` for the
+// content. It is no saying: Says records an utterance, and a request made by
+// saying something names that Says as `utterance`. The content is the
+// Situation of the questions asked. It is no context: it refines the
+// Situation of the request, so that its questions see the facts there
+// (Lint/Requests.js). Whether a request to Konsupu applies is decided by
+// IsKonsupuImperativeApplicable, not by this class.
+export class Requests extends Imperative {
+  static BRAND = Brand("commons:Requests:v1");
+  static FIELDS = {
+    requester: {},
+    addressee: {},
+    content: { kind: "situation" },
+    utterance: {},
+  };
+  ReportReferences(visit) {
+    ReportDataMembers(this, visit);
+  }
 }
 export class Plans extends Cognition {
   static BRAND = Brand("commons:Plans:v1");

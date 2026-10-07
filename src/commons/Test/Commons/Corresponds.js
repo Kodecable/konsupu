@@ -87,7 +87,7 @@ export function TestCorrespondsFacets() {
     t.Add(...(wolfFirst ? [wolf, animal] : [animal, wolf]));
     t.Add(new Corresponds(t.s, { left: animal, right: wolf }));
     t.Hold(new Present(t.s, { subject: animal }));
-    const [deed, fell] = [new Event(t.s), new Drop(t.s)];
+    const [deed, fell] = [new Event(t.s, { name: "it" }), new Drop(t.s)];
     t.Add(...(wolfFirst ? [fell, deed] : [deed, fell]));
     t.Add(new Corresponds(t.s, { left: deed, right: fell }));
     const any = t.Virtual(new Wolf(t.s));

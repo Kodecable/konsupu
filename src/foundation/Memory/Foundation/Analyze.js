@@ -58,9 +58,10 @@ export function Analyze(input) {
     }
     plan.positions.set(node, index);
     plan.parents.set(node, parent);
-    if (node instanceof Imperative) {
+    // An unwritten addressee only keeps the Imperative from being a candidate;
+    // a written one must be a data member, never a getter.
+    if (node instanceof Imperative && Object.hasOwn(node, "addressee")) {
       DataField(node, "addressee");
-      DataField(node, "content");
     }
     if (node instanceof Situation) plan.situations.push(node);
   }

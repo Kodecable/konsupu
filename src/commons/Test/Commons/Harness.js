@@ -1,14 +1,16 @@
-// Running Commons in self-tests: Evaluate with the Commons entries, and an
-// Imperative whose entry reads the raw boxed values of the asked Variables
-// from the Foundation effect, so a test sees { status, result } exactly as
-// stored.
+// Running Commons in self-tests: Evaluate with the Commons entries, and a
+// probe Imperative whose entry reads the raw boxed values of the asked
+// Variables from the Foundation effect, so a test sees { status, result }
+// exactly as stored.
 import {
   Among,
   Assertion,
+  Brand,
   Imperative,
   IsResult,
   KonsupuIdentity,
   Query,
+  ReportDataMembers,
   Situation,
   Validity,
   Variable,
@@ -19,6 +21,14 @@ import { Perspective } from "../../Memory/Foundation/Perspective.js";
 import { SolveQuery } from "../../Memory/Commons/Solve/Query.js";
 import { Lint } from "../../Memory/Commons/Lint/Lint.js";
 import { Assert } from "../Assert.js";
+
+// A request only the self-test makes; the Commons lint leaves it alone.
+class Probe extends Imperative {
+  static BRAND = Brand("commons:test:Probe:v1");
+  ReportReferences(visit) {
+    ReportDataMembers(this, visit);
+  }
+}
 
 export const Entries = {
   ValidateInput: (input) => Lint(input),
@@ -33,7 +43,10 @@ export const Entries = {
 // Evaluate `input` and return the stored values of `variables` in order.
 export function Ask(input, variables) {
   const situated = variables[0].situated;
-  const probe = new Imperative(situated, KonsupuIdentity.Ref(), { variables });
+  const probe = new Probe(situated, {
+    addressee: KonsupuIdentity.Ref(),
+    variables,
+  });
   const values = [];
   Evaluate([...input, probe], {
     ...Entries,

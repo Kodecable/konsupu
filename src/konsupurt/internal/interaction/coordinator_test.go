@@ -15,6 +15,8 @@ import (
 	"konsupurt/internal/cognitivespace/revision"
 	revisiongit "konsupurt/internal/cognitivespace/revision/git"
 	"konsupurt/internal/interaction/protocol"
+	"konsupurt/internal/llmagent/base"
+	"konsupurt/internal/llmagent/learning"
 	"konsupurt/internal/llmagent/translation"
 )
 
@@ -74,6 +76,23 @@ type testLearning struct {
 	output      int
 	noPersist   int
 	sawRollback bool
+	debugKind   string
+	debugGap    any
+}
+
+// DebugLearn stands for a dry Learning run that wrote one file and finished.
+func (l *testLearning) DebugLearn(ctx context.Context, kind string, gap any, _ base.Trace) (learning.DryRun, error) {
+	l.debugKind, l.debugGap = kind, gap
+	editor, err := l.space.Editor(cognitivespace.RoleLearning)
+	if err != nil {
+		return learning.DryRun{}, err
+	}
+	if err := editor.Create(ctx, "Interface/Debug.js", `export const Debug = true;`); err != nil {
+		return learning.DryRun{}, err
+	}
+	return learning.DryRun{Finished: true, Changes: []learning.FileChange{
+		{Path: "Interface/Debug.js", Status: "added", Diff: "@@ -0,0 +1,1 @@\n+export const Debug = true;\n"},
+	}}, nil
 }
 
 func (l *testLearning) LearnInputGap(ctx context.Context, _ protocol.InputTranslationGap) (revision.ID, error) {

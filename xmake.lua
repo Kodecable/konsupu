@@ -224,6 +224,8 @@ task("commons_space")
             ["Memory/ValidateInput.js"] = true,
             ["Memory/ResolveQuery.js"] = true,
             ["Memory/ResolveQueryDefer.js"] = true,
+            ["Memory/ResolveImperatives.js"] = true,
+            ["Memory/IsKonsupuImperativeApplicable.js"] = true,
             ["Test.js"] = true,
         }
         os.tryrm(space)

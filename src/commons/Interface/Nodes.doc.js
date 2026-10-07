@@ -46,12 +46,17 @@ export const DOCS = {
     summary:
       "Base of what can hold or not: held only when asserted or derived.",
     signature: ABSTRACT,
-    notes: ["Domain states extend it, or a Commons cognition class."],
+    notes: [
+      "Domain states extend it, or a Commons cognition class.",
+      'A subclass owns a BRAND and reports its fields: static BRAND = Brand("story:Hungry:v1"); ReportReferences(visit) { ReportDataMembers(this, visit); }.',
+    ],
   },
   Imperative: {
     value: N.Imperative,
-    summary: "A request to an addressee. Commons does not resolve it yet.",
-    signature: "new Imperative(situated, addressee, content)",
+    summary:
+      "Base of requests to an addressee: a Proposition with `addressee`.",
+    signature: ABSTRACT,
+    notes: ['To ask Konsupu a question, use Requests (Help("Requests")).'],
   },
   KonsupuIdentity: {
     value: N.KonsupuIdentity,

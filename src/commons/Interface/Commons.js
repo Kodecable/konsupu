@@ -62,6 +62,7 @@ export {
   Causes,
   Believes,
   Says,
+  Requests,
   Plans,
   Fears,
   Unable,

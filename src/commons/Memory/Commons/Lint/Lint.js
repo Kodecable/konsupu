@@ -11,13 +11,21 @@ import { CheckAssertions } from "./Assertions.js";
 import { CheckPatterns } from "./Patterns.js";
 import { CheckConditionals } from "./Conditionals.js";
 import { CheckTime } from "./Time.js";
+import { CheckRequests } from "./Requests.js";
+import { CheckValidity } from "./Validity.js";
+import { CheckNames } from "./Names.js";
+import { CheckQuestions } from "./Questions.js";
 
 const RULES = [
   CheckFields,
+  CheckNames,
   CheckAssertions,
   CheckPatterns,
   CheckConditionals,
   CheckTime,
+  CheckValidity,
+  CheckRequests,
+  CheckQuestions,
 ];
 
 export function Lint(input) {

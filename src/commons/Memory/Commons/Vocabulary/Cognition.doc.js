@@ -49,6 +49,25 @@ export const DOCS = {
     value: C.Says,
     fields: { speaker: "who says it", addressee: "to whom", content },
   },
+  Requests: {
+    value: C.Requests,
+    summary:
+      "`requester` asks `addressee` the questions of the content. A request, not a saying.",
+    fields: {
+      requester: "who asks",
+      addressee: "who is asked; KonsupuIdentity.Ref() for Konsupu",
+      content:
+        "the Situation of the questions: ask = new Situation(world), a refinement that sees the facts of the world; or new Situation(belief) to judge within a context",
+      utterance: "the Says that made the request, if it was said",
+    },
+    notes: [
+      "Variable, Validity (or Among) and Query(ask, [v]) all go in ask; push ask and what it holds before the request.",
+      "Write it like any cognition: Assert(input, new Requests(world, { addressee, content: ask })).",
+      "Only a request to Konsupu is answered: one statement for each question in ask, with the values filled in. A Query alone says nothing.",
+      "ask is no context: it is not root, unlike the content of Says.",
+    ],
+    spec: "Commons 12.3",
+  },
   Plans: attitude(C.Plans, "planner", "`planner` plans the content."),
   Fears: attitude(C.Fears, "experiencer", "`experiencer` fears the content."),
   Unable: {

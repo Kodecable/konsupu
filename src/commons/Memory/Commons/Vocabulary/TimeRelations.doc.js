@@ -39,7 +39,10 @@ export const DOCS = {
       earlier: "an anchor, a Duration or an Event (its duration)",
       later: "an anchor, a Duration or an Event (its duration)",
     },
-    notes: ["Unknown order stays unknown: nothing follows from its absence."],
+    notes: [
+      "Unknown order stays unknown: nothing follows from its absence.",
+      '"B after A" is Before({ earlier: A, later: B }): the same proposition, not its negation.',
+    ],
     spec: "Commons 14.4",
   },
   SameTime: {

@@ -34,6 +34,7 @@ export function TestTypes() {
   );
   Reject(() => new Output(), "output abstract", TypeError);
   Reject(() => new Proposition(situation), "proposition abstract", TypeError);
+  Reject(() => new Imperative(situation), "imperative abstract", TypeError);
   Assert(KonsupuIdentity.Ref() instanceof KonsupuIdentity, "global proxy");
   Assert(new TextOutput("hello") instanceof Output, "output brand");
   Reject(() => new TextOutput(42), "text output type", TypeError);
@@ -65,19 +66,11 @@ export function TestConcreteFinal() {
   class DerivedQuery extends Query {
     static BRAND = Brand("test:DerivedQuery:v1");
   }
-  class DerivedImperative extends Imperative {
-    static BRAND = Brand("test:DerivedImperative:v1");
-  }
   Reject(() => new DerivedVariable(situation), "Variable is final", TypeError);
   Reject(() => new DerivedSituation(), "Situation is final", TypeError);
   Reject(() => new DerivedTextOutput("x"), "TextOutput is final", TypeError);
   Reject(() => DerivedIdentity.Ref(), "KonsupuIdentity is final", TypeError);
   Reject(() => new DerivedQuery(situation, []), "Query is final", TypeError);
-  Reject(
-    () => new DerivedImperative(situation, situation, {}),
-    "Imperative is final",
-    TypeError,
-  );
   // A concrete domain class keeps itself final with the exported helper.
   class Concrete extends Proposition {
     static BRAND = Brand("test:ConcreteDomain:v1");
@@ -102,5 +95,13 @@ export function TestConcreteFinal() {
   Assert(
     new DerivedProposition(situation, {}) instanceof Proposition,
     "abstract categories remain extensible",
+  );
+  class DerivedImperative extends Imperative {
+    static BRAND = Brand("test:DerivedImperative:v1");
+  }
+  const request = new DerivedImperative(situation, { addressee: situation });
+  Assert(
+    request instanceof Imperative && request instanceof Proposition,
+    "Imperative is an extensible Proposition",
   );
 }

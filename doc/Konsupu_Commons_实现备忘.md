@@ -45,8 +45,48 @@ overlay 只能新增文件，或覆盖 `Memory/ValidateInput.js`、`Memory/Resol
 Go 集成测试 `src/konsupurt/internal/cognitivespace/javascript/commons_test.go` 在临时目录中按同样的覆盖规则组装空间，格式化并校验后：
 
 - 通过 Runtime 运行根 `Test()`（Foundation 与 Commons 两套自检）；
-- 在 Input Context 构造问题、在 Resolve Context 求解、在 Output Context 读出答案，验证跨 Context 的类型判断与答案（测试专用的祈使入口输出 `status:result`）；
+- 在 Input Context 构造问题、在 Resolve Context 求解、在 Output Context 读出答案，验证跨 Context 的类型判断与答案（经由 `Requests` 与 Commons 的祈使入口，输出一句陈述）；
 - 验证 lint 拒绝与“无声明决定的 Query”被归类为输入修复，原因到达 Input Translation。
+
+### 1.0 向 Konsupu 的请求（`Requests`）
+
+Foundation 的 `Output[]` 只来自祈使，`Query` 的结果只写回 Variable，所以一个问句要有输出，
+Input 里必须有一个发给 `KonsupuIdentity.Ref()` 的请求。Foundation 的 `Imperative` 是抽象 Proposition，
+Commons 的具体类是 `Requests`（`Vocabulary/Cognition.js`，规范草案 12.3），与 `Says` 平级而不是它的子类：
+`Says` 只表示说了什么，由说话提出的请求以 `utterance` 指向那个 `Says`。请求的写法不因对象而变，
+向 Konsupu 提问与叙述中的请求只有 `addressee` 不同。
+
+- 问句写在世界的细化 `ask = new Situation(world)` 里（看得见世界的事实），Variable、`Validity`
+  （或 `Among`）与 `Query` 都属于它；`ask` 是请求的 `content`，不是语境，不受 root 规则约束。
+- 形状由 lint 检查（`Lint/Requests.js`，适用于任何 `Requests`）：内容是请求所在 Situation 或某个语境（被语境字段引用的 root）的细化，
+  其中有 Query；`utterance` 是 `Says`。未写内容不是 lint 错误（叙述可以只说“有人提了要求”）。
+- `Memory/IsKonsupuImperativeApplicable.js` 对每个候选返回 `true`。故事、信念、转述中的请求是否适用，
+  留给以后的适用性判断（规范草案 16 第 17 项）；目前这些请求也会被回答。
+- `Memory/ResolveImperatives.js` 调用 `Report/Report.js`。内容中决定被 Query 的 Variable 的每个声明产出一个
+  `TextOutput`，文字是 `状态: 陈述`：
+  - `Validity` 按值写 `holds` 或 `does not hold`，陈述是它的命题；
+  - `Among` 写 `found`，陈述是它的描述；`Corresponds` 写 `found`，陈述是这一对；
+  - 非 `OK` 时写 `unknown`、`ambiguous` 或 `no method`。
+  
+  陈述中的 Variable 都换成值：被 Query 的取存下的值，没被 Query 的由 `World.Decided` 求得，没有值的写 `?`。
+  某个声明的 Variable 如果都被另一个要输出的 `Validity` 的命题读到，它就折进那一行，不单独输出。例如
+  “偷鸡的那个人被叫了吗”只有一行，“偷鸡的那个人”在行内写成狐狸。渲染（`Report/Render.js`）不截断深度，
+  只防环；锚点写成 `start(E)`、`end(E)`，Duration 写出它的锚点，canonical 的发生 `In(Occurs(e), duration(e))`
+  写成 `Occurred(e)`。问存在的 `Validity`（P 到达 Virtual Node）写出模式的全部约束，用 and 连接，所以
+  “农夫追了狐狸吗”的回答里有农夫。内容是某个语境的细化时，状态词后写明语境：`holds within Says(speaker: …): P`
+  （`Report/Within.js`，取以该语境为语境字段值的那个认知），免得把话语或信念的内容说成事实。指向 Konsupu 却没有内容的
+  `Requests` 走 `RequireInput`；Commons 不认识的 `Imperative` 子类抛普通异常（认知缺口，交给 Learning）。
+- 没有请求的 Input（包括纯陈述）没有输出，运行时给占位文本“（无输出）”，不调用 Output Translation Agent。
+- `Interface/Prompt/OutputTranslate.js` 告诉 Output Translation Agent 怎么读这些陈述：一次
+  `Texts(StructuredOutput)` 读完；各状态词与记法的含义；每行说一句，不解释，不添加；回答时要说出命题本身，不能只答“是/否”，
+  因为它看不到原话。预注入的例子里的输出文字由 `Test/Commons/Report.js` 核对，Report 改了写法，测试就会失败。
+- 自检的探针（`Test/Commons/Harness.js`）是自己的 `Imperative` 子类，lint 不认识它，不受上述检查。
+- 输入翻译的提示词正文在 `Memory/Commons/Prompt/InputTranslate.json`（`{ "system": [每行一个字符串] }`），
+  `Interface/Prompt/InputTranslate.js` 只用 `konsupu:json` 的 `Read` 读出并拼接。原因是正文远超 JS 源文件的
+  160 行上限，而 JSON 没有行数限制。正文按《翻译指引》和规范写成：工具用法、Input 结构、自行声明领域类
+  （BRAND 与 `ReportReferences`）、认定、Situation、匹配、开放世界、时间、模式、语境、序数、故事与问句的编码步骤、
+  按问法给出的写法表、读结果、输入错误与暂不支持的问法。其中的故事与问句示例都在引擎上跑过，答案写在示例注释里；
+  它们是 JSON 中的文字，自检不会执行它们，改动词汇或求解时要重新核对。
 
 ### 1.1 Help 与 `.doc.js`
 
@@ -94,7 +134,8 @@ export default Help("Only"); // Help() 列出全部出口
 ## 2. 求解组织
 
 - **ValidateInput** 运行 lint（第 4 节），不读取任何值。
-- **ResolveQuery** 为每个待求变量找出决定它的声明：`Validity.variable`、`Corresponds` 的一侧、`Among` 描述中的 Variable，范围是 Query 所在 Situation 及其祖先。每个变量都得到 `{status, result}`；依赖多个声明时取最差的 status（7.3）。没有任何声明决定的变量是输入构造错误（`RequireInput`）：未断言的命题不是约束（原则 2）。
+- **ResolveQuery** 为每个待求变量找出决定它的声明：`Validity.variable`、`Corresponds` 的一侧、`Among` 描述中的 Variable，范围是 Query 所在 Situation 及其祖先。每个变量都得到 `{status, result}`；依赖多个声明时取最差的 status（7.3）。没有任何声明决定的变量是输入构造错误（`RequireInput`）：未断言的命题不是约束（原则 2）。这部分逻辑在 `Solve/Decide.js`，与下一条共用。
+- **命题里的 Variable**（`World.Decided`）：`Validity` 的 P 中的 Variable 如果由可见的 `Among` 或 `Corresponds` 决定，就取它们合并后的值，不论它是否被 Query，也不论是否与 `Validity` 在同一个 Query 中（6.2、7.3、8.4）。值非 `OK` 时，`Validity` 取这个状态。只有没有声明决定的 Variable 才存在量化。`Among` 求解自己的描述时，其中的 Variable 仍是它自己要找的位置，不受这条影响。
 - **知识库**（`Engine/KB.js`）：某 Situation 的事实是它及其祖先中的 Assertion，经时间修饰与合取展开为“命题 + 有效时间”，再经推导规则（Conditional 与各类的 `Derive`）在有限轮内求闭包。对应关系、锚点序都按 Situation 懒建立。
 - **对应组**（`Engine/Groups.js`）：知识库把可见的 `Corresponds` 取并查集。组的代表（身份，也是优先给出的答案）是位于该 Situation 及其祖先上的成员中 Input 最靠前者，没有这样的成员时取全部成员中最靠前者。组的描述（facets）是位于祖先链上的全部成员，没有时是全部成员：匹配 Virtual 位置与 `Among` 候选、`Exclude` 的类与字段排除、规则的 `api.Is` 都按“任一描述相符”判断（6.3）。规则的 `api.Value` 给出代表，判断类应使用 `api.Is`。
 - **证明**（`Engine/Prove.js`）：被判断的项由某个事实满足（Fit，第 2 节与 9.1），且事实的时间包含项的时间；或由类自己的 `Judge` 规则判定。`Judge` 判为假时仍查找被断言的事实：断言与规则矛盾时两侧都成立，结果为 `Ambiguous`（8.4）。深度优先，先证开放位置最少的项，有步数预算。
@@ -130,6 +171,9 @@ export default Help("Only"); // Help() 列出全部出口
 - Assertion：只断言 Proposition；声明（语境关联、Validity）不接受 Assertion；被断言的命题不得经普通字段提及 Virtual Node（6.4）。
 - 模式：`Virtual` 只修饰语境对象，不修饰 Event 锚点；`Among` 不描述 Virtual Node，每个 Node 至多一个 `Among`；`NoInstance`/`Only`/`Nth` 的头，以及写出时 `Next` 的头，是 Virtual Node；未被 Virtual 修饰的语境对象不得经普通字段引用 Virtual Node；模式中的 Node 必须在消费者所在 Situation 或其祖先链上。
 - Conditional：`forall`/`exists` 只列 Virtual Node；模式中的 Virtual Node 都已列出（Event 锚点随 Event）；每个约束落在前件或后件之下（11.2）。
+- 名字：类本身就是 `Entity` 或 `Event`（没有声明自己的类）的对象必须有非空的 `name`，取原文的称呼，原文没给时用原文的代词。`Among` 描述与 Virtual 模式不受此限：那里的 `name` 是要匹配的约束（`Lint/Names.js`）。这样回答里每个对象都能被说出来。
+- Validity：`Validity` 的 variable 不再被 `Among` 描述、`Corresponds` 的一侧或另一个 `Validity` 决定（8.4，`Lint/Validity.js`）；`Validity` 的命题（任意深度）中不得有以该 `Validity` 所在 Situation 的 root 为语境的认知，即在语境中问“是否相信这个语境”（12.3）。只查问句一侧：故事中语境内容指回自身（述行句、说谎者句）是允许的。
+- 问句中的对象：`Requests` 的内容及其下的 Situation 中直接创建的 Entity、Event、TimeAnchor（事件锚点除外），必须被 Virtual 修饰、被 `Among` 描述或是 `Corresponds` 的一侧（`Lint/Questions.js`）。否则它是一个谁也不对应的新对象，问它只能得到 Unknown。
 - 时间：`Not` 的 `proposition` 中任意深度不含时间修饰（14.5）；每个 Event 至多一个起点与一个终点锚点，锚点与 Event 同属一个 Situation。
 
 求解期发现的输入错误：Query 的变量没有决定它的声明；所需变量的 Query 排在后面（Foundation 的 `RequireValue`，原因写明应调整的顺序）；不属于任何语境的 Situation 中被断言、又被所属类的定义性规则（`DEFINITIONAL`）判为假的 Proposition（`Solve/Definitions.js`，每次 Query 入口先检查，与问的是什么无关）。

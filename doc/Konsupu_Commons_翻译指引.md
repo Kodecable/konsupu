@@ -25,6 +25,8 @@ export default Help("Within"); // Help() 列出全部出口
 
 - **被引用者先入 Input。** 包装者排在被包装者之后：`In` 在它的命题之后，`Not` 在命题之后，锚点在 Event 之后、引用锚点的命题之前，被感知的内容在感知之前。顺序错误由 Foundation 报出，原因写明该把哪个 Node 提前。
 - **先后不带语义（原则 2）。** 除上一条的结构要求外，换一种合法顺序不应改变任何结果。对应组的成员谁先谁后同样不影响推导（6.3）。
+- **普通对象要有名字。** 类本身就是 `Entity` 或 `Event` 的对象必须写 `name`：原文的称呼，原文没给时用原文的代词（“它”“他”）。否则是 lint 错误，回答里也说不出它是什么。`Among` 描述与 Virtual 模式不写名字，那里的名字是匹配约束。
+- **问句里不新建具体对象。** 问句 Situation 中直接创建的 Entity、Event、TimeAnchor 是新对象，匹配不上故事。它们只能是：故事中的 Node 本身、`Among` 描述（“那个……的”）、Virtual 模式（“有没有……”）、`Corresponds` 的一侧。否则是 lint 错误。
 - **表层文本也是字段。** `name` 等字段与其他字段一样参与匹配：问句描述里写了 `name`，就只匹配同名的对象。描述只写判别所需的字段。
 - **类的字段声明。** 子类自己声明 `FIELDS` 时就成为最近的声明者：不再声明 `OPEN = true` 的话，未声明的字段会被 lint 拒绝。
 
@@ -72,10 +74,11 @@ In(Not(Unable(fox, getOut)), Duration(end(goatJump), storyEnd))   // not start(g
 
 ## 4. 是非问
 
-`Validity(proposition=P, variable=v)` 加 `Query(v)`（8.4）。能推出 P 为 `true`，能推出 `Not(P)` 为 `false`，都推不出为 `Unknown`，都能推出为 `Ambiguous`。
+`Validity(proposition=P, variable=v)` 加 `Query(v)`（8.4）。Query 只计算，不报告：问句要写在 `ask = new Situation(world)` 里（Variable、Validity、Query 都属于它），再断言一个请求 `Requests(addressee=KonsupuIdentity.Ref(), content=ask)`（12.3），答案才会出现在输出里。被问的命题 P 要先进入 Input，但不断言；`Validity` 与 `Query` 是声明，同样只进入 Input，不断言。能推出 P 为 `true`，能推出 `Not(P)` 为 `false`，都推不出为 `Unknown`，都能推出为 `Ambiguous`。
 
 - **按问句的极性翻译。** 机器答案应与问句同向，不要用补集绕：
   - “可以做 X 吗”（许可）：`Validity(Not(Forbids(deed=X)))`。存在禁令时为 `false`。
+  - “B 在 A 之后吗”：`Validity(Before(earlier=A, later=B))`。“之后”是 `Before` 两边对调，问的是同一个命题，不是它的否定。
   - “能做 X 吗”（能力，在某段时间）：`Validity(In(Not(Unable(actor, X)), D))` 或 `At(Not(Unable(...)), a)`。已知那段时间内无能力时为 `false`。
 - **规范不推出事实。** `Forbids`、`Mandates` 不推出“没有发生”或“发生了”：违禁正是故事常写的内容。“他有没有做 X”问发生，不问禁令。
 - **断言与规则矛盾。** 被断言的 P 又被某个类的规则判为不成立（8.4）：
@@ -94,6 +97,17 @@ In(Not(Unable(fox, getOut)), Duration(end(goatJump), storyEnd))   // not start(g
   ```
 
   分开写的两条 `Among` 是对同一个变量的两个声明。它们不取交集：值不同即 `Ambiguous`（7.3）。
+- **问“那个做了 X 的人怎样了”**：先用 `Among` 找出那个人，再在被问的命题里用它的 Variable；是非问的答案另用一个 Variable：
+
+  ```text
+  who = Variable
+  Among(node=Agent(action=steal, actor=who), situation=world)
+  v = Variable
+  Validity(proposition=Agent(action=chase, actor=who), variable=v)
+  Query(v)
+  ```
+
+  回答里 `who` 写成找到的那个人（8.4、6.2）。`who` 不能兼作 `v`，那是 lint 错误。
 - **问“何时”问锚点**（14.10）：Query 事件的开始锚点，或 `At(P, a)` 中的 a。不要在描述里放一个只表示“某一时刻”的 Virtual 锚点：不同时刻的解会成为不同候选，结果为 `Ambiguous`。
 - **命题位置不能 Virtual**（6.4）：类型化的命题字段要么直接引用那个命题，要么用 `And` 组合约束。
 
@@ -116,7 +130,8 @@ In(Not(Unable(fox, getOut)), Duration(end(goatJump), storyEnd))   // not start(g
 
 ## 7. 语境与对应
 
-- 信念、话语、计划的内容是 root Situation（12）。在语境中判断时，把 `Validity` 放在那个语境中，或用 `Among(node=..., situation=语境)`。
+- 信念、话语、计划的内容是 root Situation（12）。在语境中判断时（“狐狸是否认为……”“狐狸是否说过……”），问句写在 `ask = new Situation(语境)` 里，请求照旧由世界断言（12.3）；找值也可以用 `Among(node=..., situation=语境)`。
+- **只存在于语境中的对象与事件建在语境里。** 牧羊人想象的狼、他相信发生了的“狼来”，都在信念的 Situation 中创建，Agent 由该语境断言；`Occurred(input, e)` 在 e 所在的 Situation 中断言，所以它们只在语境中成立。建在世界里，它们就在世界中发生了。问“他是否认为某事发生了”时，在 `new Situation(信念)` 中用 Virtual 模式问存在，不要新建一个具体的事件。在信念中问的是信念的内容，不要再问 `Believes` 本身：“在狐狸的信念中，狐狸是否相信这个信念”无法判断，是 lint 错误；要问“狐狸是否有这个信念”，在世界中问。
 - **对应**：`Corresponds(left, right)` 说两个语境对象是同一个实际对象（6.3）。在某个 Situation 中，这个对象是什么由该 Situation 及其祖先上的成员给出；别的语境里的成员只提供身份。狐狸话里的“跳下”与故事中的“偶然掉落”对应时，在故事中它是偶然掉落。
 - 对应只在声明它的 Situation 及其后代中可见（6.3）：在世界中声明的对应，在信念语境中判断时不存在。语境内需要它时，按内容匹配（Virtual 模式），或在语境中另行声明。
 - **问“其实是什么”**：`Corresponds(left=x, right=已知一侧)` 加 `Query(x)`，答案是对应组中的另一侧（6.3）。

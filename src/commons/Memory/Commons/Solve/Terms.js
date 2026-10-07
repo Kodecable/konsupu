@@ -28,9 +28,14 @@ export function DescriptionVariables(world, node) {
   return [...found];
 }
 
-export function FreeVariables(world, node) {
+// The Variables of `node` without a value. With a `scope`, a Variable the
+// Among and Corresponds declarations visible there decide is not free
+// either: it takes their value (World.Decided). An Among solving its own
+// description passes no scope.
+export function FreeVariables(world, node, scope = null) {
   return DescriptionVariables(world, node).filter((variable) => {
-    return world.ReadVariable(variable).free;
+    if (!world.ReadVariable(variable).free) return false;
+    return scope === null || world.Decided(variable, scope) === null;
   });
 }
 

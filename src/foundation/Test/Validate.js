@@ -4,7 +4,6 @@ import {
   Variable,
   Proposition,
   Query,
-  Imperative,
   KonsupuIdentity,
   ReportDataMembers,
 } from "../Interface/Nodes.js";
@@ -14,6 +13,7 @@ import { ResolveQuery } from "./Fixtures/ResolveQuery.js";
 import { ResolveQueryDefer } from "./Fixtures/ResolveQueryDefer.js";
 import { IsKonsupuImperativeApplicable } from "./Fixtures/IsKonsupuImperativeApplicable.js";
 import { ResolveImperatives } from "./Fixtures/ResolveImperatives.js";
+import { TestImperative } from "./Fixtures/TestImperative.js";
 import { ValidateInput } from "./Fixtures/ValidateInput.js";
 class LintProposition extends Proposition {
   static BRAND = Brand("foundation:test:LintProposition:v1");
@@ -38,8 +38,9 @@ export function TestValidateInputOnce() {
     operands: [1, 2],
   });
   const query = new Query(situation, [variable]);
-  const imperative = new Imperative(situation, KonsupuIdentity.Ref(), {
-    value: variable,
+  const imperative = new TestImperative(situation, {
+    addressee: KonsupuIdentity.Ref(),
+    content: { value: variable },
   });
   const input = [situation, variable, relation, query, imperative];
   const events = [];

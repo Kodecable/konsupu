@@ -9,7 +9,8 @@ export const DOCS = {
     value: B.Entity,
     summary: "An ordinary object: there is one such thing here.",
     notes: [
-      "Domain kinds extend it: class Fox extends Entity {}.",
+      'Domain kinds extend it, each with its own BRAND: class Fox extends Entity { static BRAND = Brand("story:Fox:v1"); }.',
+      "A plain Entity (no class of its own) needs a name: the text's word, or its pronoun.",
       "A written field (name, ...) is a constraint and takes part in matching.",
       "A subclass declaring FIELDS without OPEN rejects undeclared fields.",
     ],
@@ -21,7 +22,8 @@ export const DOCS = {
     notes: [
       "Occurred(input, e) writes that it happened; start(e), end(e) are its anchors.",
       "The agent is a separate Agent(action, actor), not a field.",
-      "Domain events extend it: class Jump extends Event {}.",
+      'Domain events extend it, each with its own BRAND: class Jump extends Event { static BRAND = Brand("story:Jump:v1"); }.',
+      "A plain Event (no class of its own) needs a name: the text's word, or its pronoun.",
     ],
     spec: "Commons 13",
   },

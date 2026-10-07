@@ -102,8 +102,11 @@ export function Deref(term, side, env, ctx) {
     if (env.vars.has(term) || !IsNode(term)) return [term, side];
     if (term instanceof Variable) {
       const read = ctx.world.ReadVariable(term);
-      if (read.free) return [term, side];
-      [term, side] = [read.value, GROUND];
+      const value = read.free
+        ? ctx.world.Decided(term, side.scope ?? term.situated)
+        : read;
+      if (value === null) return [term, side];
+      [term, side] = [value.value, GROUND];
       continue;
     }
     if (term instanceof Situation) return [term, side];

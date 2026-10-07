@@ -1,5 +1,6 @@
 import * as Among from "./Among.js";
 import * as Validity from "./Validity.js";
+import * as Decided from "./Decided.js";
 import * as Corresponds from "./Corresponds.js";
 import * as Patterns from "./Patterns.js";
 import * as Conditional from "./Conditional.js";
@@ -20,6 +21,11 @@ import * as Windows from "./Windows.js";
 import * as Ordinals from "./Ordinals.js";
 import * as Diagnosis from "./Diagnosis.js";
 import * as Help from "./Help.js";
+import * as Report from "./Report.js";
+import * as Answers from "./Answers.js";
+import * as Statements from "./Statements.js";
+import * as Contexts from "./Contexts.js";
+import * as Requests from "./Requests.js";
 
 const Modules = [
   Types,
@@ -27,6 +33,7 @@ const Modules = [
   Lint2,
   Among,
   Validity,
+  Decided,
   Corresponds,
   Patterns,
   Conditional,
@@ -44,6 +51,11 @@ const Modules = [
   Limits,
   Scale,
   Help,
+  Report,
+  Answers,
+  Statements,
+  Contexts,
+  Requests,
 ];
 
 // The Commons self-test suite; the root Test.js runs it with Foundation's.

@@ -43,6 +43,7 @@ type OutputRequest struct {
 	Revision revision.ID
 	Mutated  bool
 	Tree     revision.TreeID
+	Trace    base.Trace
 }
 
 type OutputResult struct {

@@ -39,10 +39,10 @@ const relation = new TestProposition(situation, {
   result: next, op: "sum", operands: [variable, 1]
 });
 const paired = new Query(situation, [variable, next]);
-const first = new Imperative(situation, KonsupuIdentity.Ref(),
-  { value: variable, mode: "`+mode+`" });
-const second = new Imperative(situation, KonsupuIdentity.Ref(),
-  { value: next, mode: "`+mode+`" });
+const first = new TestImperative(situation, { addressee: KonsupuIdentity.Ref(),
+  content: { value: variable, mode: "`+mode+`" } });
+const second = new TestImperative(situation, { addressee: KonsupuIdentity.Ref(),
+  content: { value: next, mode: "`+mode+`" } });
 export default [situation, variable, constraint, next, relation,
   paired, first, second];`)
 			if err != nil {
@@ -67,10 +67,10 @@ func TestFoundationImperativeFailureWithholdsAllOutputs(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			_, interaction := foundationFixture(t, true)
 			output, err := resolveFoundation(t, interaction, foundationImports+`
-const first = new Imperative(situation, KonsupuIdentity.Ref(),
-  { value: variable });
-const second = new Imperative(situation, KonsupuIdentity.Ref(),
-  { value: variable, mode: "`+mode+`" });
+const first = new TestImperative(situation, { addressee: KonsupuIdentity.Ref(),
+  content: { value: variable } });
+const second = new TestImperative(situation, { addressee: KonsupuIdentity.Ref(),
+  content: { value: variable, mode: "`+mode+`" } });
 export default [situation, variable, constraint, query, first, second];`)
 			if output != nil {
 				output.Close()
@@ -93,6 +93,10 @@ class TestProposition extends Proposition {
   static BRAND = Brand("test:javascript:LoopsProposition:v1");
   ReportReferences(visit) { ReportDataMembers(this, visit); }
 }
+class TestImperative extends Imperative {
+  static BRAND = Brand("test:javascript:LoopsImperative:v1");
+  ReportReferences(visit) { ReportDataMembers(this, visit); }
+}
 const destination = new Situation();
 const source = new Situation(destination);
 const mention = new TestProposition(destination, { scene: source });
@@ -103,8 +107,8 @@ const relation = new TestProposition(source, {
 const imported = ref(source, variable);
 const exportQuery = new Query(destination, [imported]);
 const actualQuery = new Query(source, [variable]);
-const ask = new Imperative(destination, KonsupuIdentity.Ref(),
-  { value: imported });
+const ask = new TestImperative(destination, { addressee: KonsupuIdentity.Ref(),
+  content: { value: imported } });
 export default [destination, source, mention, variable, relation,
   exportQuery, actualQuery, ask];`)
 	if err != nil {
@@ -123,8 +127,8 @@ func TestFoundationGlobalIdentityIsContextIndependent(t *testing.T) {
 	output, err := resolveFoundation(t, interaction, foundationImports+`
 const mention = new TestProposition(situation, { about: KonsupuIdentity.Ref() });
 Object.defineProperty(constraint, "op", { value: "global-identity" });
-const ask = new Imperative(situation, KonsupuIdentity.Ref(),
-  { value: variable });
+const ask = new TestImperative(situation, { addressee: KonsupuIdentity.Ref(),
+  content: { value: variable } });
 export default [situation, variable, constraint, mention, query, ask];`)
 	if err != nil {
 		t.Fatal(err)

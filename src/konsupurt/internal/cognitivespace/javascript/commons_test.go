@@ -18,29 +18,13 @@ import (
 // The Foundation files the Commons overlay may replace; every other overlay
 // file must be new. This mirrors the commons_space task in xmake.lua.
 var commonsReplaceable = map[string]bool{
-	"Memory/ValidateInput.js":     true,
-	"Memory/ResolveQuery.js":      true,
-	"Memory/ResolveQueryDefer.js": true,
-	"Test.js":                     true,
+	"Memory/ValidateInput.js":                 true,
+	"Memory/ResolveQuery.js":                  true,
+	"Memory/ResolveQueryDefer.js":             true,
+	"Memory/ResolveImperatives.js":            true,
+	"Memory/IsKonsupuImperativeApplicable.js": true,
+	"Test.js": true,
 }
-
-// An imperative entry for the tests only: it outputs the stored Commons
-// value of each Variable named by the imperative, as "status:result".
-const commonsProbe = `
-import { Perspective } from "./Foundation/Perspective.js";
-import { TextOutput } from "./Foundation/TextOutput.js";
-export function ResolveImperatives(input, imperatives, remaining, state) {
-  const outputs = [];
-  for (const imperative of remaining) {
-    const view = new Perspective(imperative, state);
-    for (const variable of imperative.content.variables) {
-      const value = view.Value(variable);
-      outputs.push(new TextOutput(value.status + ":" + String(value.result)));
-    }
-  }
-  return { resolved: new Set(remaining), outputs };
-}
-`
 
 func commonsFixture(t *testing.T) (*Engine, *Interaction) {
 	t.Helper()
@@ -73,15 +57,6 @@ func commonsFixture(t *testing.T) (*Engine, *Interaction) {
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	probes := map[string]string{
-		"ResolveImperatives.js":            commonsProbe,
-		"IsKonsupuImperativeApplicable.js": "export function IsKonsupuImperativeApplicable() { return true; }\n",
-	}
-	for name, source := range probes {
-		if err := os.WriteFile(filepath.Join(root, "Memory", name), []byte(source), 0o644); err != nil {
-			t.Fatal(err)
-		}
 	}
 	result, err := cognitivespace.Format(context.Background(), root)
 	if err != nil || len(result.Warnings) != 0 {
@@ -131,7 +106,7 @@ func TestCommonsPublishedSelfTests(t *testing.T) {
 // Output Context.
 const commonsStory = `
 import { Brand, Entity, Proposition, ReportDataMembers, Situation, Variable,
-  Query, Among, Validity, Imperative, KonsupuIdentity, Assert, Not, At,
+  Query, Among, Validity, Requests, KonsupuIdentity, Assert, Not, At,
   TimeAnchor } from "./Interface/Commons.js";
 class Wolf extends Entity { static BRAND = Brand("test:go:Wolf:v1"); }
 class Present extends Proposition {
@@ -182,11 +157,16 @@ export default Texts(StructuredOutput).sort().join(",");`)
 
 func TestCommonsCrossContextAnswers(t *testing.T) {
 	_, interaction := commonsFixture(t)
+	// The question is asked in a refinement of the story, the content of a
+	// request to Konsupu.
 	got := commonsOutputs(t, interaction, commonsStory+`
-input.push(new Query(story, [colour, valid]),
-  new Imperative(story, KonsupuIdentity.Ref(), { variables: [colour, valid] }));
+const ask = new Situation(story);
+const asked = new Variable(ask);
+input.push(ask, asked, new Query(ask, [asked]),
+  new Validity(ask, { proposition: present, variable: asked }));
+Assert(input, new Requests(story, { addressee: KonsupuIdentity.Ref(), content: ask }));
 export default input;`)
-	if !strings.Contains(got, "OK:black") || !strings.Contains(got, "OK:true") {
+	if !strings.Contains(got, "holds: Present(subject: Wolf") {
 		t.Fatalf("Commons answers across Contexts: %q", got)
 	}
 }

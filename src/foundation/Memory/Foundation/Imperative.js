@@ -1,15 +1,15 @@
-import { Brand, Final } from "./Brand.js";
-import { SituatedNode } from "./SituatedNode.js";
-import { DataField, WalkReferences } from "./DataGraph.js";
-export class Imperative extends SituatedNode {
+import { Brand } from "./Brand.js";
+import { Proposition } from "./Proposition.js";
+// A request to an addressee, as a cognition. A concrete subclass keeps the
+// addressee in the data member `addressee`; what is requested and every other
+// role belong to the domain. Occurring in the Input does not make the request
+// hold: IsKonsupuImperativeApplicable decides whether a candidate applies.
+export class Imperative extends Proposition {
   static BRAND = Brand("foundation:Imperative:v1");
-  constructor(situated, addressee, content) {
-    Final(Imperative, new.target);
-    super(situated, { addressee, content });
-  }
-  // The addressee and the request content are this type's semantic references.
-  ReportReferences(visit) {
-    WalkReferences(DataField(this, "addressee"), visit);
-    WalkReferences(DataField(this, "content"), visit);
+  constructor(situated, fields = {}) {
+    if (new.target === Imperative) {
+      throw new TypeError("Imperative is abstract");
+    }
+    super(situated, fields);
   }
 }

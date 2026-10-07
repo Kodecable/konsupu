@@ -18,6 +18,7 @@ export function ImperativeLoop(
   const imperatives = [];
   const candidates = input.filter((node) => {
     if (!(node instanceof Imperative)) return false;
+    if (!Object.hasOwn(node, "addressee")) return false;
     return node.addressee instanceof KonsupuIdentity;
   });
   for (const imperative of candidates) {
