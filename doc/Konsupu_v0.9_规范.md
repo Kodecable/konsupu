@@ -150,7 +150,47 @@ Runtime 只规定：
 - 识别、搜索、关联和检查 cognition 的函数；
 - Output Translation 所需的读取、解释或观察辅助函数。
 
-Runtime 不预定义 `Interface/` 内部目录、函数名称、参数结构或返回类型。
+Runtime 不预定义 `Interface/` 内部目录、函数名称、参数结构或返回类型，
+唯一的例外是 `Interface/Prompt/`。
+
+##### Interface/Prompt/
+
+`Interface/Prompt/` 由 Runtime 保留，用于让 cognition 为 Runtime Agent 提供
+提示词。以下三个文件都是可选的：
+
+```text
+Interface/Prompt/InputTranslate.js
+Interface/Prompt/OutputTranslate.js
+Interface/Prompt/Learning.js
+```
+
+每个文件导出：
+
+```js
+export function Prompt(request) {
+    return { system, history }; // 或 null
+}
+```
+
+- **`system`**：可选字符串。Runtime 把它追加在该 Agent 内置 instructions
+  之后。它只能补充内置 instructions，不能替换或放宽它们。
+- **`history`**：可选数组，是预注入的对话。它位于 instructions 与本次 goal
+  之间，compression 不会折叠它。它必须以 user 消息开始，只能调用该 Agent
+  实际拥有的工具，并且每个工具调用都要有对应的 tool 消息。
+- **`request`** 因 Agent 而异：
+  - Input Translation 收到 `{ raw }`；
+  - Output Translation 收到 `{ mutated }`，看不到 Raw；
+  - Learning 收到 `{ kind, gap }`。
+
+Runtime 以对应 Translation Context 的权限求值这些函数：Input Translation 与
+Learning 用 Input Translation 的权限，Output Translation 用 Output Translation
+的权限。Translation Agent 的文件工具看不到 `Interface/Prompt/**`，`js_eval`
+临时 module 也不能 import 它。Learning 像编辑其他 source 一样编辑它。
+
+Test 以固定的样例 request 求值每个存在的 Prompt 函数，并校验返回形状。校验
+失败等同于 Test 失败，因此坏的 Prompt 无法发布。运行时某个 Prompt 求值失败或
+不合规时，该 Agent 改用内置提示词，Interaction 结果带上 warning。这样坏的
+Prompt 不会使负责修复它的 Learning 无法启动。
 
 
 ##### Resolve.js
@@ -1072,8 +1112,8 @@ finish()
 Runtime 随后自动执行 Test。Learning Agent 自己不能运行 Test。
 
 Test failure、source load failure、import failure、syntax error、160×80
-failure 或 Test exception 都会使 Runtime 拒绝本次 `finish`，并把结构化
-diagnostic 返回同一个 Learning Agent。
+failure、Test exception 或 `Interface/Prompt/` 校验失败都会使 Runtime 拒绝
+本次 `finish`，并把结构化 diagnostic 返回同一个 Learning Agent。
 
 Runtime 在返回 diagnostic 前必须先恢复 Test Base State。
 

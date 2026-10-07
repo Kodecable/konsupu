@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
+
+	"konsupurt/internal/cognitivespace"
 )
 
 func validateTransientModule(ctx context.Context, source string) error {
@@ -29,7 +31,7 @@ func validateTransientModule(ctx context.Context, source string) error {
 				}
 				if !validTransientImport(args.Path) {
 					return transientResolveFailure(
-						"transient modules may import only Interface/**/*.js paths with an explicit extension"), nil
+						"transient modules may import only Interface/**/*.js paths outside Interface/Prompt, with an explicit extension"), nil
 				}
 				return api.OnResolveResult{Path: args.Path, External: true}, nil
 			})
@@ -77,8 +79,10 @@ func validTransientImport(specifier string) bool {
 	}
 	relative := strings.TrimPrefix(specifier, "./")
 	clean := path.Clean(relative)
+	// The Host reads Interface/Prompt itself; agents do not see it.
 	return clean == relative && clean != "Interface/.js" &&
-		strings.HasPrefix(clean, "Interface/")
+		strings.HasPrefix(clean, "Interface/") &&
+		!strings.HasPrefix(clean, cognitivespace.PromptDirectory+"/")
 }
 
 func transientResolveFailure(message string) api.OnResolveResult {

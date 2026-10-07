@@ -97,12 +97,26 @@ target("konsupurt")
             rootdir = path.join(os.projectdir(), "src/konsupurt"),
             anonymous = true
         })
-        local envs, args = konsupurt.goenvarg(target)
-        
-        args = table.join({"run"}, args, {"."}, target:get("runargs"))
-        os.execv("go", args, {
-            curdir = path.join(os.projectdir(), "src", "konsupurt"), envs = envs
-        })
+        local envs = konsupurt.goenvarg(target)
+
+        -- Command-line arguments of `xmake run` arrive through the option, not
+        -- through target:get("runargs"), which only holds set_runargs. A nil
+        -- would cut table.join short, so wrap each part. A leading "--" is
+        -- xmake's own separator: left in, cobra would take what follows as
+        -- positional arguments.
+        import("core.base.option")
+        local extra = table.wrap(option.get("arguments"))
+        if extra[1] == "--" then
+            table.remove(extra, 1)
+        end
+        local args = table.join(table.wrap(target:get("runargs")), extra)
+
+        -- Run the binary built by on_build from the project root, so relative
+        -- paths on the command line mean what they say there. `go run` would
+        -- start it inside src/konsupurt.
+        local program = path.join(os.projectdir(), target:targetdir(), "konsupu" .. (target:is_plat("mingw") and ".exe" or ""))
+        assert(os.isfile(program), "konsupu is not built: " .. program)
+        os.execv(program, args, {curdir = os.projectdir(), envs = envs})
     end)
 
     on_clean(function (target) 
@@ -225,14 +239,6 @@ task("commons_space")
                 raise("src/commons must not replace Foundation file " .. relative)
             end
             os.cp(file, target)
-        end
-        -- Every cognition directory needs its marker, hidden or not listed.
-        for _, dir in ipairs(os.dirs(path.join(overlay, "**"))) do
-            local target = path.join(space, path.relative(dir, overlay))
-            local marker = path.join(target, ".konsupu-directory")
-            if not os.isfile(marker) then
-                io.writefile(marker, "")
-            end
         end
         print("assembled %s", space)
     end)

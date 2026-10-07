@@ -8,8 +8,11 @@ import "C"
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime/cgo"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -202,6 +205,80 @@ func (e *Engine) Test(ctx context.Context, tree revision.TreeID) (TestResult, er
 		return TestResult{}, err
 	}
 	return TestResult{Passed: bool(passed)}, nil
+}
+
+// PromptContext selects the permissions a space prompt function runs with:
+// those of an Input or an Output Translation Context.
+type PromptContext int
+
+const (
+	PromptInput PromptContext = iota
+	PromptOutput
+)
+
+// EvaluatePrompt calls Prompt(request), exported by the Cognition Space
+// module at modulePath, in a fresh Runtime and returns JSON.stringify of its
+// result, at most maxBytes long. requestJSON is a JSON value; a module that
+// throws, a result JSON.stringify rejects and a longer text are errors.
+func (e *Engine) EvaluatePrompt(
+	ctx context.Context, tree revision.TreeID, kind PromptContext, modulePath, requestJSON string, maxBytes int,
+) (string, error) {
+	if tree == "" {
+		return "", errors.New("prompt evaluation requires a working tree identity")
+	}
+	if !json.Valid([]byte(requestJSON)) {
+		return "", errors.New("prompt request is not JSON")
+	}
+	specifier, err := json.Marshal("./" + modulePath)
+	if err != nil {
+		return "", err
+	}
+	nativeKind := C.KJS_CONTEXT_INPUT
+	if kind == PromptOutput {
+		nativeKind = C.KJS_CONTEXT_OUTPUT
+	}
+	runtime, err := e.newRuntime()
+	if err != nil {
+		return "", err
+	}
+	defer runtime.close()
+	promptContext, err := runtime.newContext(ctx, C.kjs_context_kind_t(nativeKind), string(tree))
+	if err != nil {
+		return "", err
+	}
+	defer promptContext.Close()
+	// The envelope keeps what Prompt throws: an exception escaping module
+	// evaluation leaves only an uninitialized default export.
+	source := "import { Prompt } from " + string(specifier) + ";\n" +
+		"let text;\n" +
+		"try {\n" +
+		"  const prompt = Prompt(" + requestJSON + ");\n" +
+		"  text = JSON.stringify({ value: prompt === undefined ? null : prompt });\n" +
+		"} catch (error) {\n" +
+		"  text = JSON.stringify({ error: String(error?.stack ? `${error}\\n${error.stack}` : error) });\n" +
+		"}\n" +
+		"export default text;\n"
+	value, err := promptContext.evaluate(ctx, source)
+	if err != nil {
+		return "", err
+	}
+	defer value.Close()
+	text, err := value.String(ctx, maxBytes)
+	if err != nil {
+		return "", err
+	}
+	var envelope struct {
+		Value json.RawMessage `json:"value"`
+		Error *string         `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(text), &envelope); err != nil {
+		return "", err
+	}
+	if envelope.Error != nil {
+		//lint:ignore ST1005 Prompt is the exported function name.
+		return "", fmt.Errorf("Prompt raised: %s", strings.TrimSpace(*envelope.Error))
+	}
+	return string(envelope.Value), nil
 }
 
 func (e *Engine) Close() error {

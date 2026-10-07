@@ -19,6 +19,7 @@ import * as AllTime from "./AllTime.js";
 import * as Windows from "./Windows.js";
 import * as Ordinals from "./Ordinals.js";
 import * as Diagnosis from "./Diagnosis.js";
+import * as Help from "./Help.js";
 
 const Modules = [
   Types,
@@ -42,6 +43,7 @@ const Modules = [
   Invariants,
   Limits,
   Scale,
+  Help,
 ];
 
 // The Commons self-test suite; the root Test.js runs it with Foundation's.

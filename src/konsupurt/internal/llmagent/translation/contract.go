@@ -6,6 +6,7 @@ import (
 	"konsupurt/internal/cognitivespace/javascript"
 	"konsupurt/internal/cognitivespace/revision"
 	"konsupurt/internal/interaction/protocol"
+	"konsupurt/internal/llmagent/base"
 )
 
 type InputSubmitter interface {
@@ -17,10 +18,14 @@ type InputResolution struct {
 	Revision revision.ID
 }
 
+// Tree is the working tree the space prompt is read from; without it the
+// built-in prompt is used.
 type InputRequest struct {
 	Raw       string
 	Context   *javascript.Context
 	Submitter InputSubmitter
+	Trace     base.Trace
+	Tree      revision.TreeID
 }
 
 type InputResult struct {
@@ -37,6 +42,7 @@ type OutputRequest struct {
 	Output   *javascript.Value
 	Revision revision.ID
 	Mutated  bool
+	Tree     revision.TreeID
 }
 
 type OutputResult struct {

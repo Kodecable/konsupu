@@ -20,6 +20,7 @@ import (
 	"konsupurt/internal/interaction/protocol"
 	"konsupurt/internal/llmagent/base"
 	"konsupurt/internal/llmagent/learning"
+	"konsupurt/internal/llmagent/spaceprompt"
 	"konsupurt/internal/llmagent/translation"
 	"konsupurt/internal/llmapi/openai/completion"
 	"konsupurt/internal/referencelibrary"
@@ -56,6 +57,11 @@ type TestResult struct {
 type Session interface {
 	Interact(context.Context, string) (protocol.InteractionResult, error)
 	Close() error
+}
+
+// Debugger is a Session that can run one agent alone, without publishing.
+type Debugger interface {
+	DebugInputTranslation(context.Context, string, base.Trace) (interaction.DebugInputResult, error)
 }
 
 type Service struct {
@@ -163,7 +169,7 @@ func copySourceTree(source, destination string) error {
 		if relative == "." {
 			return nil
 		}
-		if strings.HasPrefix(info.Name(), ".") && info.Name() != cognitivespace.DirectoryMarker {
+		if strings.HasPrefix(info.Name(), ".") {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -235,6 +241,16 @@ func (s *Service) testSpace(ctx context.Context, root string, configuration conf
 	if testResult.Diagnostic != nil {
 		result.Diagnostic = testResult.Diagnostic.Message
 	}
+	if result.Passed {
+		// The Space prompts are part of what Test accepts (spaceprompt).
+		if err := spaceprompt.NewLoader(space, engine).Check(ctx, tree); err != nil {
+			if javascript.IsInfrastructureError(err) {
+				return result, err
+			}
+			result.Passed = false
+			result.Diagnostic = err.Error()
+		}
+	}
 	return result, nil
 }
 
@@ -297,9 +313,14 @@ func (s *Service) Open(ctx context.Context, options OpenOptions) (Session, error
 	}
 
 	provider := options.Config.LLM.OpenAICompletion
-	client, err := completion.New(completion.Options{
+	clientOptions := completion.Options{
 		BaseURL: provider.BaseURL, APIKey: provider.APIKey, Headers: provider.Headers,
-	})
+		Body: provider.Body,
+	}
+	if provider.DebugHTTP {
+		clientOptions.Debug = os.Stderr
+	}
+	client, err := completion.New(clientOptions)
 	if err != nil {
 		return fail(err)
 	}
@@ -355,12 +376,14 @@ func (s *Service) Open(ctx context.Context, options OpenOptions) (Session, error
 		return fail(err)
 	}
 
-	inputAgent := translation.NewInputAgent(runner, space)
-	outputAgent := translation.NewOutputAgent(runner, space)
-	learningAgent := learning.NewAgent(runner, space, repository, engine, references)
+	prompts := spaceprompt.NewLoader(space, engine)
+	inputAgent := translation.NewInputAgent(runner, space).WithPrompts(prompts)
+	outputAgent := translation.NewOutputAgent(runner, space).WithPrompts(prompts)
+	learningAgent := learning.NewAgent(runner, space, repository, engine, references).WithPrompts(prompts)
 	coordinator, err := interaction.NewCoordinator(interaction.Dependencies{
 		Space: space, Revisions: repository, JavaScript: engine,
 		Input: inputAgent, Output: outputAgent, Learning: learningAgent,
+		Warnings: prompts,
 	})
 	if err != nil {
 		_ = workspace.Close()
@@ -507,6 +530,16 @@ func (s *session) Interact(ctx context.Context, raw string) (protocol.Interactio
 		return protocol.InteractionResult{}, errors.New("Application Session is closed")
 	}
 	return s.coordinator.Interact(ctx, raw)
+}
+
+func (s *session) DebugInputTranslation(ctx context.Context, raw string, trace base.Trace) (interaction.DebugInputResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		//lint:ignore ST1005 Application Session is a proper noun.
+		return interaction.DebugInputResult{}, errors.New("Application Session is closed")
+	}
+	return s.coordinator.DebugInputTranslation(ctx, raw, trace)
 }
 
 func (s *session) Close() error {

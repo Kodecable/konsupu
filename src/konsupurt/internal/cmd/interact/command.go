@@ -39,6 +39,9 @@ func NewCommand(service shared.Application) *cobra.Command {
 			if interactErr != nil || closeErr != nil {
 				return errors.Join(interactErr, closeErr)
 			}
+			if !flags.json {
+				shared.WriteWarnings(command.ErrOrStderr(), result.Warnings)
+			}
 			return shared.WriteResult(command.OutOrStdout(), result, flags.json)
 		},
 	}

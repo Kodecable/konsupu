@@ -9,11 +9,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
 
 const OpenAICompletionDriver = "openai-completion"
+
+// ManagedBodyFields are request fields the Runtime owns; the extra body in
+// llm.openai_completion.body cannot override them.
+var ManagedBodyFields = []string{"model", "messages", "tools", "tool_choice", "max_tokens", "stream"}
 
 type Config struct {
 	LLM        LLMConfig        `json:"llm"`
@@ -32,6 +37,12 @@ type OpenAICompletionConfig struct {
 	BaseURL string            `json:"base_url"`
 	APIKey  string            `json:"api_key"`
 	Headers map[string]string `json:"headers"`
+	// Body holds extra top-level request fields, such as temperature or a
+	// provider's thinking switch, merged into every request.
+	Body map[string]json.RawMessage `json:"body,omitempty"`
+	// DebugHTTP prints every request (headers without credentials, body) and
+	// response status and headers to stderr.
+	DebugHTTP bool `json:"debug_http,omitempty"`
 }
 
 type JavaScriptConfig struct {
@@ -100,6 +111,14 @@ func (c Config) Validate() error {
 		}
 		if !validHTTPHeaderValue(value) {
 			return fmt.Errorf("llm.openai_completion.headers contains an invalid value for %q", name)
+		}
+	}
+	for name, value := range provider.Body {
+		if slices.Contains(ManagedBodyFields, name) {
+			return fmt.Errorf("llm.openai_completion.body contains managed field %q", name)
+		}
+		if name == "" || !json.Valid(value) {
+			return fmt.Errorf("llm.openai_completion.body has an invalid entry %q", name)
 		}
 	}
 	if !validHTTPHeaderValue(provider.APIKey) {

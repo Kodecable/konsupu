@@ -65,9 +65,25 @@ type Role struct {
 	Termination  Termination
 }
 
+// Task is one run. Guidance and History come from the Cognition Space
+// (spaceprompt): Guidance is appended to the role's instructions, History
+// is pinned between them and the goal. Runner.ValidateSpacePrompt checks
+// both; Run rejects what it would reject.
 type Task struct {
-	Goal    string
-	Context *Context
+	Goal     string
+	Context  *Context
+	Trace    Trace
+	Guidance string
+	History  []llmapi.Message
+}
+
+// Trace observes a run while it happens. Observe receives every Event as it
+// is recorded. Verbatim events carry assistant text and tool arguments
+// without the bounds applied to retained events; tool observations are
+// always the bounded text the model saw.
+type Trace struct {
+	Observe  func(Event)
+	Verbatim bool
 }
 
 type Runner struct {

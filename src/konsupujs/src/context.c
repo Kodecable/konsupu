@@ -100,6 +100,16 @@ kjs_status_t kjs_evaluate_default_export(kjs_context_t *context, const char *sou
         return pending;
     }
     if (JS_IsException(evaluated)) { return kjs_exception_status(context, diagnostic); }
+    /* Module evaluation yields a promise. One that is rejected carries what the module threw at top level; without
+     * this the default export is read from a module that never finished and the reader sees only "default is not
+     * initialized". */
+    if (JS_IsPromise(evaluated) && JS_PromiseState(context->context, evaluated) == JS_PROMISE_REJECTED)
+    {
+        JSValue reason = JS_PromiseResult(context->context, evaluated);
+        JS_FreeValue(context->context, evaluated);
+        JS_Throw(context->context, reason);
+        return kjs_exception_status(context, diagnostic);
+    }
     JS_FreeValue(context->context, evaluated);
     JSValue namespace_value = JS_GetModuleNamespace(context->context, module);
     if (JS_IsException(namespace_value)) { return kjs_exception_status(context, diagnostic); }

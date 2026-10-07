@@ -2,6 +2,18 @@
 
 本文面向把自然语言（故事与问题）翻译成 Commons Input 的人或程序。它不增加语义，只把规范草案（下称“规范”）中容易写错的地方整理成写法；条款号指向规范。条目多数来自 `run/aesop-commons-phase2`（13 篇伊索寓言、65 问）的实际翻译。
 
+翻译 Agent 读不到 `Memory/` 中的类定义。在 `js_eval` 中调用 Help 查看任一出口
+的构造方式、字段、规则与写法提示：
+
+```js
+import { Help } from "./Interface/Commons.js";
+export default Help("Within"); // Help() 列出全部出口
+```
+
+`js_eval` 的结果有大小上限。Help 的返回值是字符串，过长时自己分页读：
+`Help("Within").slice(0, 1500)`，再 `slice(1500, 3000)`；也可以
+`Help().split("\n").slice(0, 40)`。一次只查一个出口。
+
 写法拿不准时，先问两件事：
 
 1. **这句话认定了什么，没认定什么？** 没写的就是未知（原则 4、5）。“没有别的”“只有这些”“一直”都要显式写出。

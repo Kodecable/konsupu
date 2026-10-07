@@ -31,8 +31,7 @@ src/foundation/
 └── Test.js                        自检总入口，只调用 FoundationSuite
 ```
 
-所有认知子目录都有 Runtime 要求的空 `.konsupu-directory` 标记。测试领域入口
-位于 `Test/Fixtures/`，由 `Test.js` 或 Go 集成测试显式加载；它们不再放在
+测试领域入口位于 `Test/Fixtures/`，由 `Test.js` 或 Go 集成测试显式加载；它们不再放在
 隐藏目录，也不会增加非法根 entry。
 
 `Memory/` 下有五个领域入口。默认 `ValidateInput` 不做任何检查；其余四个
@@ -133,6 +132,21 @@ LLM，因此一个占位配置即可（token 限制必须通过 `config` 的校�
 }
 ```
 
+`llm.openai_completion.body` 是可选的对象，其中每一项作为顶层字段合并进每个
+请求，用来控制温度和各家 provider 自己的思考开关或档位，值原样发送：
+
+```json
+"body": {"temperature": 0.2, "thinking": {"type": "enabled"}, "reasoning_effort": "high"}
+```
+
+具体字段名取决于 provider。`model`、`messages`、`tools`、`tool_choice`、
+`max_tokens`、`stream` 由 Runtime 管理，写进 `body` 会使配置校验失败。
+
+`llm.openai_completion.debug_http` 设为 `true` 时，每次请求把方法、URL、请求头、
+请求体，以及响应的状态和响应头写到 stderr，用来排查 provider 返回的错误。
+Authorization 以及名字含 `auth`、`key`、`token`、`secret`、`cookie` 的头的值显示为 `***`，
+请求体里的提示词则原样输出，不要把输出贴到公开的地方。
+
 全部断言通过时输出 `passed` 并以退出码 0 结束；任一断言失败则退出码非 0。
 
 Foundation 自检主体位于 `Test/Suite.js` 的 `FoundationSuite()`，根 `Test.js`
@@ -143,6 +157,24 @@ Foundation 自检主体位于 `Test/Suite.js` 的 `FoundationSuite()`，根 `Tes
 都不会运行、永远成功**，不能用来验证。`./xmake.agents test` 会同时运行
 原生 C 测试与 Go 测试，其中 Go 侧会调用 `Test()`，因此它也是有效验证；
 `konsupu test` 是只跑 Foundation 自检的更快路径。
+
+`Test()` 通过后，`konsupu test` 还会以样例 request 求值空间中存在的
+`Interface/Prompt/*.js`，并校验返回形状（见 v0.9 规范 Interface/Prompt 一节）。
+
+## 调试 Input Translation
+
+单独运行一次 Input Translation，观察 Agent 的工具调用轨迹与结果：
+
+```sh
+konsupu debug input-translate --space <space> --config <config.json> -- "<raw>"
+echo "<raw>" | konsupu debug input-translate --space <space> --config <config.json>
+```
+
+- **需要真实 LLM 配置**：它会调用模型。
+- **不改动空间**：`finish()` 照常运行 Resolve，所以输入错误的返修反馈会回到
+  Agent；但 Resolve 的改动随后被还原，不发布 Revision，也不进入 Learning。
+- **输出**：轨迹实时写到 stderr，结果写到 stdout；`--json` 在结束时把
+  `{events, result}` 一次写到 stdout。
 
 ## Foundation 的求值组织
 

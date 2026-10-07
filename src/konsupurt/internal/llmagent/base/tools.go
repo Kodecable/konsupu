@@ -80,12 +80,13 @@ func (b Toolbox) Dispatch(ctx context.Context, call llmapi.ToolCall) (Action, er
 	return tool.Invoke(ctx, call.Arguments)
 }
 
-func assistantEvent(iteration int, message llmapi.Message) Event {
-	const (
-		maxAssistantTextBytes  = 2048
-		maxToolArgumentsBytes  = 1024
-		maxAssistantEventBytes = 8 << 10
-	)
+// assistantEvent describes a model message. Verbatim events keep the whole
+// text and arguments; boundedText leaves a value whole at limit 0.
+func assistantEvent(iteration int, message llmapi.Message, verbatim bool) Event {
+	maxAssistantTextBytes, maxToolArgumentsBytes, maxAssistantEventBytes := 2048, 1024, 8<<10
+	if verbatim {
+		maxAssistantTextBytes, maxToolArgumentsBytes, maxAssistantEventBytes = 0, 0, 0
+	}
 	names := make([]string, 0, len(message.ToolCalls))
 	calls := make([]string, 0, len(message.ToolCalls))
 	for _, call := range message.ToolCalls {
@@ -109,10 +110,13 @@ func Schema(properties map[string]any, required ...string) map[string]any {
 	if properties == nil {
 		properties = map[string]any{}
 	}
-	return map[string]any{
-		"type": "object", "properties": properties, "required": required,
-		"additionalProperties": false,
+	schema := map[string]any{"type": "object", "properties": properties, "additionalProperties": false}
+	// A nil slice would encode as "required": null, which strict providers
+	// reject as an invalid tool schema; omit the key instead.
+	if len(required) != 0 {
+		schema["required"] = required
 	}
+	return schema
 }
 
 func Text(description string) map[string]any {

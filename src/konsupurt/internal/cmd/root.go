@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"konsupurt/internal/cmd/completion"
+	"konsupurt/internal/cmd/debug"
 	"konsupurt/internal/cmd/format"
 	"konsupurt/internal/cmd/initialize"
 	"konsupurt/internal/cmd/interact"
@@ -36,7 +37,7 @@ func NewRootCommand(app Application, streams Streams) *cobra.Command {
 		return &shared.UsageError{Err: err}
 	})
 	command.AddCommand(
-		initialize.NewCommand(app), format.NewCommand(), interact.NewCommand(app), repl.NewCommand(app), testcommand.NewCommand(app), completion.NewCommand(),
+		initialize.NewCommand(app), format.NewCommand(), interact.NewCommand(app), repl.NewCommand(app), testcommand.NewCommand(app), debug.NewCommand(app), completion.NewCommand(),
 	)
 	return command
 }

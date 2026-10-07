@@ -41,6 +41,9 @@ func NewCommand(service shared.Application) *cobra.Command {
 					_, _ = fmt.Fprintf(command.ErrOrStderr(), "Error: %v\n", interactErr)
 					continue
 				}
+				if !flags.json {
+					shared.WriteWarnings(command.ErrOrStderr(), result.Warnings)
+				}
 				if err := shared.WriteResult(command.OutOrStdout(), result, flags.json); err != nil {
 					return errors.Join(err, session.Close())
 				}

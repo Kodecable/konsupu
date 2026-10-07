@@ -11,6 +11,7 @@ import (
 	"konsupurt/internal/cognitivespace/revision"
 	"konsupurt/internal/interaction/protocol"
 	"konsupurt/internal/llmagent/base"
+	"konsupurt/internal/llmagent/spaceprompt"
 	"konsupurt/internal/referencelibrary"
 )
 
@@ -20,6 +21,14 @@ type Agent struct {
 	repository revision.Repository
 	tests      TestRunner
 	references *referencelibrary.Library
+	prompts    *spaceprompt.Loader
+}
+
+// WithPrompts makes the agent read the space prompt Learning.js, and makes
+// finish check every space prompt before publishing.
+func (a *Agent) WithPrompts(prompts *spaceprompt.Loader) *Agent {
+	a.prompts = prompts
+	return a
 }
 
 func NewAgent(
@@ -83,7 +92,14 @@ func (a *Agent) learn(ctx context.Context, kind string, gap any) (revision.ID, e
 			finish,
 		),
 	}
-	result, err := a.runner.Run(ctx, role, base.Task{Goal: "Repair the Cognition Space for this typed gap:\n\n" + string(payload)})
+	tree, err := a.repository.WorkingTree(ctx)
+	if err != nil {
+		return "", err
+	}
+	task := a.prompts.Task(ctx, a.runner, role, tree, spaceprompt.Learning,
+		map[string]any{"kind": kind, "gap": gap},
+		base.Task{Goal: "Repair the Cognition Space for this typed gap:\n\n" + string(payload)})
+	result, err := a.runner.Run(ctx, role, task)
 	if err != nil {
 		return "", err
 	}
@@ -142,6 +158,11 @@ func (a *Agent) finishTool(expected revision.ID, kind string) base.Tool {
 					detail = string(encoded)
 				}
 				return base.Action{}, base.VisibleError("The Learning draft did not pass Test.", detail)
+			}
+			if a.prompts != nil {
+				if err := a.prompts.Check(ctx, tree); err != nil {
+					return base.Action{}, base.VisibleError("The Learning draft has an invalid Interface/Prompt module.", err.Error())
+				}
 			}
 			published, err := a.repository.Publish(ctx, expected, revision.Publication{
 				Kind: revision.PublicationLearning, Summary: "learn " + kind,

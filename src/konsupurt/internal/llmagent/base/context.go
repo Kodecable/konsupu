@@ -13,6 +13,9 @@ const compressedContextMarker = "Anchored summary of prior context."
 type Context struct {
 	messages   []llmapi.Message
 	compressed string
+	// prefix counts the messages compression keeps: the instructions, a
+	// pre-injected history and the goal.
+	prefix int
 }
 
 type CompressionSelection struct {
@@ -21,10 +24,17 @@ type CompressionSelection struct {
 }
 
 func NewContext(instructions, goal string) *Context {
-	return &Context{messages: []llmapi.Message{
-		{Role: llmapi.RoleSystem, Content: instructions},
-		{Role: llmapi.RoleUser, Content: goal},
-	}}
+	return NewContextWithHistory(instructions, nil, goal)
+}
+
+// NewContextWithHistory pins history between the instructions and the goal;
+// compression never folds it into the summary.
+func NewContextWithHistory(instructions string, history []llmapi.Message, goal string) *Context {
+	messages := make([]llmapi.Message, 0, len(history)+2)
+	messages = append(messages, llmapi.Message{Role: llmapi.RoleSystem, Content: instructions})
+	messages = append(messages, history...)
+	messages = append(messages, llmapi.Message{Role: llmapi.RoleUser, Content: goal})
+	return &Context{messages: messages, prefix: len(messages)}
 }
 
 func (c *Context) Append(message llmapi.Message) {
@@ -44,7 +54,7 @@ func (c *Context) Compressed() string {
 }
 
 func (c *Context) SelectCompression(recentTokens int) (CompressionSelection, bool) {
-	start := 2
+	start := c.prefix
 	if c.compressed != "" {
 		start++
 	}
@@ -80,7 +90,7 @@ func (c *Context) SelectCompression(recentTokens int) (CompressionSelection, boo
 
 func (c *Context) ApplyCompression(summary string, recent []llmapi.Message, _ RequestUsage) {
 	summary = strings.TrimSpace(summary)
-	messages := append(c.messages[:2:2], llmapi.Message{
+	messages := append(c.messages[:c.prefix:c.prefix], llmapi.Message{
 		Role: llmapi.RoleUser,
 		Content: compressedContextMarker +
 			" This summary carries all relevant state from the earlier conversation. Continue from it and treat persistent cognition and source files as authoritative.\n" + summary,

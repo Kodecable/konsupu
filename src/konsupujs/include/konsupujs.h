@@ -145,6 +145,11 @@ extern "C"
     KJS_API void kjs_value_release(kjs_value_t **value);
     KJS_API kjs_status_t kjs_value_preview(const kjs_value_t *value, char **text, size_t *text_length,
                                            kjs_diagnostic_t **diagnostic);
+    /* Copies a string value whole as UTF-8, unlike the bounded preview. A value
+     * that is not a string is an invalid argument; a string of more than
+     * max_bytes UTF-8 bytes exceeds the limit. Free *text with kjs_buffer_free. */
+    KJS_API kjs_status_t kjs_value_string(const kjs_value_t *value, size_t max_bytes, char **text,
+                                          size_t *text_length, kjs_diagnostic_t **diagnostic);
 
     KJS_API kjs_diagnostic_t *kjs_diagnostic_create(kjs_status_t status, const char *code, const char *message);
     KJS_API kjs_status_t kjs_diagnostic_status(const kjs_diagnostic_t *diagnostic);

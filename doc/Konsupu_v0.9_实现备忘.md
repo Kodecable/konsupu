@@ -64,8 +64,59 @@ stale lock 文件”来恢复运行：删除一个仍被持有的锁文件会令
 现有 Revision；普通 Git 仓库中的 Cognition-like source 会复制到临时目录，
 避免在用户的 Git 仓库中创建 Konsupu 元数据。
 
+## 目录标记 `.konsupu-directory`
+
+Git 不保存空目录。Runtime 创建目录时会在其中写入一个空的隐藏文件
+`.konsupu-directory`，Git Revision 后端把它放行进 Revision，空目录因此不会
+在 capture 与 restore 之间丢失。它只服务于这个后端：按规范点路径不属于
+cognition，Cognition Space 的校验忽略它，不要求目录里有它，没有它或内容
+非空都不影响校验；Agent-facing 文件边界同样看不到它。手工建立的空目录没有
+它时不会进入 Git Revision，这是可接受的。
+
 ## Raw 与 Answer 的空白输入
 
 仅由空白字符构成的 Raw 必须被拒绝，并视为调用者错误。
 
 对于仅由空白字符构成的 Answer，当前实现仅作拒绝处理，不额外解释或细分其错误原因；这是有意保留的实现简化，而非对 Raw 输入规则的放宽。
+
+## Cognition Space 提示词（`Interface/Prompt/`）
+
+规范的 Interface 一节保留了 `Interface/Prompt/`。实现要点：
+
+- **求值。** `javascript.Engine.EvaluatePrompt` 为每次求值新建一个 Runtime，
+  在 Input 或 Output Context 中由 Host 生成的临时 module 调用 `Prompt(request)`。
+  - 结果经 `JSON.stringify` 后，通过 `kjs_value_string` 原样取回，不经过有长度
+    上限的 preview。上限是 `spaceprompt.MaxBytes`。
+  - Host 生成的 module 不受 Agent 临时 module 的 import 规则约束。
+  - `Prompt` 抛出的异常写进返回信封，所以诊断里有异常文本和栈。
+- **解析与校验。** `llmagent/spaceprompt` 负责解析结果，并在各 Agent 启动时
+  读取。`base.Runner.ValidateSpacePrompt` 检查 history 的结构。`system` 与
+  history 合计不得超过上下文窗口的 1/4（`base.SpacePromptMaxShare`），因为它们
+  每一步都会发送。
+- **工具名单。** `spaceprompt.Tools` 列出每个 Agent 的工具名，Translation 与
+  Learning 两个包各有测试保证它与真实工具箱一致。
+- **Test 校验。** `konsupu test` 与 Learning `finish` 在 Test.js 通过后，调用
+  `spaceprompt.Loader.Check`，以 `spaceprompt.Samples` 中的样例 request 求值每个
+  存在的 Prompt。
+- **运行时回退。** 运行时失败的 Prompt 由 `Loader` 记一条 warning，然后改用
+  内置提示词。
+  - warning 进入 `InteractionResult.warnings`，文本模式下打印到 stderr。
+  - Agent 的事件轨迹会多一条 `space_prompt` 事件。
+
+## 调试：`konsupu debug input-translate`
+
+`konsupu debug input-translate --space <path> --config <file> [--json] [--] [<raw> | -]`
+单独运行一次 Input Translation（别名 `input_translate`）。Raw 省略或为 `-` 时从
+stdin 读取。
+
+- **dry-run Resolve。** `finish()` 照常运行 Resolve，因此输入错误的返修反馈
+  会照常回到 Agent；但 Resolve 的改动随即被还原。
+  - 从不发布 Revision，也从不进入 Learning。
+  - Resolve exception 作为结果报告。
+- **崩溃恢复。** 运行期间写入 active Interaction 记录，异常退出后下次打开会恢复。
+- **输出。** 文本模式下，轨迹实时写到 stderr：
+  - 模型消息与工具调用参数不截断；
+  - 工具观察是模型实际看到的截断后文本。
+
+  结果写到 stdout：Resolve 输出的 preview、Gap，或 Resolve exception。
+  `--json` 在结束时把 `{events, result}` 一次写到 stdout。

@@ -68,14 +68,25 @@ func (c *Runner) Run(ctx context.Context, role Role, task Task) (Result, error) 
 	if toolChoice.Mode != llmapi.ToolChoiceNone {
 		instructions += "\n\n" + toolProtocolInstructions
 	}
+	if task.Guidance != "" || len(task.History) > 0 {
+		if err := c.ValidateSpacePrompt(role, task.Guidance, task.History); err != nil {
+			return Result{}, fmt.Errorf("invalid space prompt: %w", err)
+		}
+	}
+	instructions = withGuidance(instructions, task.Guidance)
 	agentContext := task.Context
 	if agentContext == nil {
-		agentContext = NewContext(instructions, task.Goal)
+		agentContext = NewContextWithHistory(instructions, task.History, task.Goal)
 	}
 	s := &session{
 		runner: c, role: role, task: task, budget: normalizedBudget(c.Budget),
 		context: agentContext, phase: PhaseCreated, toolChoice: toolChoice,
-		events: []Event{{Kind: "state", Name: string(PhaseCreated)}},
+	}
+	s.record(Event{Kind: "state", Name: string(PhaseCreated)})
+	if task.Guidance != "" || len(task.History) > 0 {
+		s.record(Event{Kind: "space_prompt", Content: fmt.Sprintf(
+			"%s\n(%d pre-injected history message(s))", task.Guidance, len(task.History),
+		)})
 	}
 	if err := validateBudget(s.budget); err != nil {
 		return Result{}, err
@@ -152,7 +163,7 @@ func (s *session) run(ctx context.Context) (Result, error) {
 			return s.result, fmt.Errorf("completion response role %q is not assistant", message.Role)
 		}
 		s.context.AppendModel(message, usage)
-		s.events = append(s.events, assistantEvent(iteration, message))
+		s.record(assistantEvent(iteration, message, s.task.Trace.Verbatim))
 		if len(message.ToolCalls) == 0 {
 			final, reminder, done, resolveErr := s.role.Termination.Resolve(message)
 			if resolveErr != nil {
@@ -188,7 +199,7 @@ func (s *session) run(ctx context.Context) (Result, error) {
 			}
 			observation = boundedToolObservation(observation, MaxToolObservationBytes)
 			s.context.Append(llmapi.Message{Role: "tool", ToolCallID: call.ID, Content: observation})
-			s.events = append(s.events, Event{
+			s.record(Event{
 				Iteration: iteration, Kind: "tool", Name: call.Name,
 				Content: observation, Failed: executeErr != nil,
 			})
@@ -229,7 +240,7 @@ func (s *session) compress(ctx context.Context) (bool, error) {
 	}
 	s.recordUsage(usage)
 	s.context.ApplyCompression(compressed.Summary, selected.Recent, usage)
-	s.events = append(s.events, Event{
+	s.record(Event{
 		Iteration: s.iteration, Kind: "context_compressed", Content: compressed.Summary,
 	})
 	if err = s.transition(PhasePreparing); err != nil {
@@ -310,8 +321,15 @@ func (s *session) transition(next Phase) error {
 		return fmt.Errorf("invalid agent state transition %s -> %s", s.phase, next)
 	}
 	s.phase = next
-	s.events = append(s.events, Event{Iteration: s.iteration, Kind: "state", Name: string(next)})
+	s.record(Event{Iteration: s.iteration, Kind: "state", Name: string(next)})
 	return nil
+}
+
+func (s *session) record(event Event) {
+	s.events = append(s.events, event)
+	if s.task.Trace.Observe != nil {
+		s.task.Trace.Observe(event)
+	}
 }
 
 func (s *session) attach(result Result) Result {

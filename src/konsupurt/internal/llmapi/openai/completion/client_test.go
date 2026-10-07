@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"konsupurt/internal/llmapi"
 )
@@ -207,5 +208,73 @@ func httpResponse(status int, body string, headers http.Header) *http.Response {
 	return &http.Response{
 		StatusCode: status, Status: http.StatusText(status), Header: headers,
 		Body: io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func TestExtraBodyIsMergedAndManagedFieldsAreRejected(t *testing.T) {
+	var sent map[string]json.RawMessage
+	httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if err := json.NewDecoder(request.Body).Decode(&sent); err != nil {
+			t.Fatal(err)
+		}
+		return httpResponse(200, `{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`, nil), nil
+	})}
+	client, err := New(Options{
+		BaseURL: "https://example.invalid/v1", Client: httpClient,
+		Body: map[string]json.RawMessage{"temperature": json.RawMessage("0.2"), "thinking": json.RawMessage(`{"type":"enabled"}`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Generate(context.Background(), basicRequest()); err != nil {
+		t.Fatal(err)
+	}
+	if string(sent["temperature"]) != "0.2" || string(sent["thinking"]) != `{"type":"enabled"}` || string(sent["model"]) != `"model"` {
+		t.Fatalf("sent=%v", sent)
+	}
+	for _, name := range []string{"model", "messages", "tools", "tool_choice", "max_tokens", "stream"} {
+		if _, err := New(Options{BaseURL: "https://example.invalid", Body: map[string]json.RawMessage{name: json.RawMessage("1")}}); err == nil {
+			t.Fatalf("managed body field %q was accepted", name)
+		}
+	}
+	if _, err := New(Options{BaseURL: "https://example.invalid", Body: map[string]json.RawMessage{"x": json.RawMessage("{")}}); err == nil {
+		t.Fatal("invalid JSON body field was accepted")
+	}
+}
+
+func TestHTTPErrorKeepsResponseBody(t *testing.T) {
+	body := `{"error":{"message":"bad","type":"invalid_request_error","param":"thinking"},"extra":"x"}`
+	client, _ := New(Options{BaseURL: "https://example.invalid", Client: responseClient(400, body, nil)})
+	_, err := client.Generate(context.Background(), basicRequest())
+	var apiError *llmapi.Error
+	if !errors.As(err, &apiError) || !strings.Contains(apiError.Message, "HTTP 400: bad") || !strings.Contains(apiError.Message, body) {
+		t.Fatalf("error=%v", err)
+	}
+	long := strings.Repeat("界", maxErrorBodyBytes)
+	client, _ = New(Options{BaseURL: "https://example.invalid", Client: responseClient(500, long, nil)})
+	_, err = client.Generate(context.Background(), basicRequest())
+	if !errors.As(err, &apiError) || !strings.Contains(apiError.Message, "truncated") || !utf8.ValidString(apiError.Message) {
+		t.Fatalf("long body error=%q", err)
+	}
+}
+
+func TestDebugOutputShowsRequestAndResponseHeadersWithoutCredentials(t *testing.T) {
+	var out strings.Builder
+	httpClient := responseClient(200, `{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`, http.Header{"X-Request-Id": []string{"r-1"}})
+	client, err := New(Options{BaseURL: "https://example.invalid/v1", APIKey: "sk-secret", Headers: map[string]string{"X-Api-Key": "sk-other"}, Client: httpClient, Debug: &out})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Generate(context.Background(), basicRequest()); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{"-> POST https://example.invalid/v1/chat/completions", "Authorization: ***", `"model":"model"`, "<- 200", "X-Request-Id: r-1"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("debug output lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "sk-secret") || strings.Contains(text, "sk-other") {
+		t.Fatalf("debug output leaks the API key:\n%s", text)
 	}
 }

@@ -42,6 +42,8 @@ func TestDecodeRejectsUnknownFieldAndTrailingValue(t *testing.T) {
 		strings.Replace(validConfig, `"headers": {}`, `"headers": null`, 1),
 		strings.Replace(validConfig, `"driver": "openai-completion"`, `"driver": "unknown"`, 1),
 		"null",
+		strings.Replace(validConfig, `"headers": {}`, `"headers": {}, "body": {"model": "other"}`, 1),
+		strings.Replace(validConfig, `"headers": {}`, `"headers": {}, "body": {"max_tokens": 1}`, 1),
 		strings.Replace(validConfig, `"headers": {}`, `"headers": {"Bad Header": "x"}`, 1),
 		strings.Replace(validConfig, `"headers": {}`, `"headers": {"X-Test": "bad\r\nvalue"}`, 1),
 		strings.Replace(validConfig, `"api_key": ""`, `"api_key": "bad\u0000key"`, 1),
@@ -50,5 +52,17 @@ func TestDecodeRejectsUnknownFieldAndTrailingValue(t *testing.T) {
 		if _, err := Decode(strings.NewReader(source)); err == nil {
 			t.Fatalf("Decode(%q) succeeded", source)
 		}
+	}
+}
+
+func TestDecodeAcceptsExtraBody(t *testing.T) {
+	source := strings.Replace(validConfig, `"headers": {}`, `"headers": {}, "body": {"temperature": 0.2, "thinking": {"type": "enabled"}}`, 1)
+	config, err := Decode(strings.NewReader(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := config.LLM.OpenAICompletion.Body
+	if string(body["temperature"]) != "0.2" || string(body["thinking"]) != `{"type": "enabled"}` {
+		t.Fatalf("body=%v", body)
 	}
 }

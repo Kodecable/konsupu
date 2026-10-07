@@ -75,13 +75,18 @@ func TestValidationIgnoresHiddenRuntimeMetadata(t *testing.T) {
 	}
 }
 
-func TestValidationRejectsInvalidDirectoryMarker(t *testing.T) {
+func TestValidationIgnoresDirectoryMarkers(t *testing.T) {
 	space := initializedSpace(t)
-	if err := os.WriteFile(filepath.Join(space.Root(), "Memory", DirectoryMarker), []byte("x"), 0o600); err != nil {
+	memory := filepath.Join(space.Root(), "Memory")
+	// A marker is a hidden path: neither its content nor its absence matters.
+	if err := os.WriteFile(filepath.Join(memory, DirectoryMarker), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := space.Validate(context.Background()); err == nil {
-		t.Fatal("non-empty directory marker passed validation")
+	if err := os.Mkdir(filepath.Join(memory, "Bare"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := space.Validate(context.Background()); err != nil {
+		t.Fatalf("hidden marker or missing marker failed validation: %v", err)
 	}
 }
 

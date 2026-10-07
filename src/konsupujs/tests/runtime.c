@@ -133,6 +133,26 @@ void test_runtime_context_value(void **state)
     assert_int_equal(strlen(preview), preview_length);
     kjs_buffer_free(preview);
 
+    char *whole = NULL;
+    size_t whole_length = 0U;
+    assert_int_equal(kjs_value_string(value, 64U, &whole, &whole_length, &diagnostic), KJS_STATUS_INVALID_ARGUMENT);
+    assert_non_null(diagnostic);
+    assert_string_equal(kjs_diagnostic_code(diagnostic), "not_string");
+    kjs_diagnostic_destroy(&diagnostic);
+    kjs_value_t *long_string = NULL;
+    const char long_source[] = "export default 'x'.repeat(2000) + '\\u00e9';";
+    assert_int_equal(kjs_context_evaluate_module(input, long_source, strlen(long_source), &long_string, &diagnostic),
+                     KJS_STATUS_OK);
+    assert_int_equal(kjs_value_string(long_string, 4096U, &whole, &whole_length, &diagnostic), KJS_STATUS_OK);
+    assert_int_equal(whole_length, 2002U);
+    assert_int_equal((unsigned char)whole[2000], 0xc3U);
+    kjs_buffer_free(whole);
+    assert_int_equal(kjs_value_string(long_string, 1000U, &whole, &whole_length, &diagnostic),
+                     KJS_STATUS_LIMIT_EXCEEDED);
+    assert_null(whole);
+    kjs_diagnostic_destroy(&diagnostic);
+    kjs_value_release(&long_string);
+
     const char invalid_utf8[] = {(char)0xc3, (char)0x28};
     invalid_value = NULL;
     assert_int_equal(

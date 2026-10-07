@@ -9,6 +9,10 @@ import (
 	"konsupurt/internal/llmagent/base"
 )
 
+// maxStringResultBytes bounds a string js_eval result shown whole; the
+// observation limit still applies after JSON escaping.
+const maxStringResultBytes = 12 << 10
+
 func translationTools(reader cognitivespace.Reader, jsContext *javascript.Context) []base.Tool {
 	return []base.Tool{
 		{
@@ -29,11 +33,19 @@ func translationTools(reader cognitivespace.Reader, jsContext *javascript.Contex
 					return base.Action{}, base.Abort(err)
 				}
 				defer value.Close()
-				preview, err := value.Preview(ctx)
+				// A string result is shown as the text itself: the preview would
+				// quote and escape it, and the observation escapes it again.
+				text, err := value.String(ctx, maxStringResultBytes)
+				if errors.Is(err, javascript.ErrNotString) {
+					text, err = value.Preview(ctx)
+				}
+				if errors.Is(err, javascript.ErrPreviewLimit) {
+					return base.Action{}, base.VisibleError("The result is too large to display.", "Default-export less: a slice of the string, fewer items, or only the part you need. For Help, look up one export per call.")
+				}
 				if err != nil {
 					return base.Action{}, base.Abort(err)
 				}
-				return observed(preview), nil
+				return observed(text), nil
 			},
 		},
 		{

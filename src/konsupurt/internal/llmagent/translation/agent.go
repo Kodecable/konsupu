@@ -10,16 +10,31 @@ import (
 	"konsupurt/internal/cognitivespace/javascript"
 	"konsupurt/internal/interaction/protocol"
 	"konsupurt/internal/llmagent/base"
+	"konsupurt/internal/llmagent/spaceprompt"
 )
 
 type InputAgent struct {
-	runner *base.Runner
-	space  *cognitivespace.Space
+	runner  *base.Runner
+	space   *cognitivespace.Space
+	prompts *spaceprompt.Loader
 }
 
 type OutputAgent struct {
-	runner *base.Runner
-	space  *cognitivespace.Space
+	runner  *base.Runner
+	space   *cognitivespace.Space
+	prompts *spaceprompt.Loader
+}
+
+// WithPrompts makes the agent read the space prompt InputTranslate.js.
+func (a *InputAgent) WithPrompts(prompts *spaceprompt.Loader) *InputAgent {
+	a.prompts = prompts
+	return a
+}
+
+// WithPrompts makes the agent read the space prompt OutputTranslate.js.
+func (a *OutputAgent) WithPrompts(prompts *spaceprompt.Loader) *OutputAgent {
+	a.prompts = prompts
+	return a
 }
 
 func NewInputAgent(runner *base.Runner, space *cognitivespace.Space) *InputAgent {
@@ -52,7 +67,12 @@ func (a *InputAgent) Translate(ctx context.Context, request InputRequest) (trans
 			inputFinishTool(request, a.space),
 		),
 	}
-	result, err := a.runner.Run(ctx, role, base.Task{Goal: "Translate this raw user input into StructuredInput:\n\n" + request.Raw})
+	task := a.prompts.Task(ctx, a.runner, role, request.Tree, spaceprompt.InputTranslate,
+		map[string]any{"raw": request.Raw}, base.Task{
+			Goal:  "Translate this raw user input into StructuredInput:\n\n" + request.Raw,
+			Trace: request.Trace,
+		})
+	result, err := a.runner.Run(ctx, role, task)
 	if err != nil {
 		return InputResult{}, err
 	}
@@ -95,7 +115,9 @@ func (a *OutputAgent) Translate(ctx context.Context, request OutputRequest) (tra
 			outputFinishTool(a.space),
 		),
 	}
-	result, err := a.runner.Run(ctx, role, base.Task{Goal: goal})
+	task := a.prompts.Task(ctx, a.runner, role, request.Tree, spaceprompt.OutputTranslate,
+		map[string]any{"mutated": request.Mutated}, base.Task{Goal: goal})
+	result, err := a.runner.Run(ctx, role, task)
 	if err != nil {
 		return OutputResult{}, err
 	}

@@ -22,6 +22,12 @@ type Dependencies struct {
 	Input      translation.Input
 	Output     translation.Output
 	Learning   learning.Learner
+	// Warnings, when set, collects the warnings of the run's agents.
+	Warnings WarningSource
+}
+
+type WarningSource interface {
+	Drain() []string
 }
 
 type Coordinator struct {
@@ -44,36 +50,17 @@ func (c *Coordinator) Interact(ctx context.Context, raw string) (result protocol
 	if strings.TrimSpace(raw) == "" {
 		return result, errors.New("raw interaction input must not be empty")
 	}
-	c.mu.Lock()
-	if c.closed {
-		c.mu.Unlock()
-		//lint:ignore ST1005 Interaction is a proper noun.
-		return result, errors.New("Interaction Coordinator is closed")
+	release, err := c.acquire()
+	if err != nil {
+		return result, err
 	}
-	if c.active {
-		c.mu.Unlock()
-		return result, errors.New("another Interaction is already active")
-	}
-	c.active = true
-	c.mu.Unlock()
-	defer func() {
-		c.mu.Lock()
-		c.active = false
-		c.mu.Unlock()
-	}()
+	defer release()
 
-	current, err := c.dependencies.Revisions.Current(ctx)
+	current, err := c.cleanCurrent(ctx)
 	if err != nil {
 		return result, err
 	}
-	dirty, err := c.dependencies.Revisions.HasChanges(ctx)
-	if err != nil {
-		return result, err
-	}
-	if dirty {
-		//lint:ignore ST1005 Cognition Space and Interaction are proper nouns.
-		return result, errors.New("Cognition Space has external unpublished modifications")
-	}
+	_ = c.drainWarnings()
 	activity := revision.Activity{Base: current, LastPublished: current, Phase: "input_translation"}
 	if err := c.storeActivity(ctx, activity); err != nil {
 		return result, err
@@ -119,7 +106,7 @@ func (c *Coordinator) Interact(ctx context.Context, raw string) (result protocol
 			activity:    &activity,
 		}
 		inputResult, inputErr := c.dependencies.Input.Translate(ctx, translation.InputRequest{
-			Raw: raw, Context: jsInteraction.InputContext(), Submitter: submitter,
+			Raw: raw, Context: jsInteraction.InputContext(), Submitter: submitter, Tree: tree,
 		})
 		if inputErr != nil {
 			_ = jsInteraction.Close()
@@ -205,8 +192,46 @@ func (c *Coordinator) Interact(ctx context.Context, raw string) (result protocol
 		completed = true
 		return protocol.InteractionResult{
 			Answer: answer, Revision: string(published), LearningPublications: learningPublications,
+			Warnings: c.drainWarnings(),
 		}, nil
 	}
+}
+
+// acquire marks the Coordinator active for one Interaction or debug run.
+func (c *Coordinator) acquire() (func(), error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		//lint:ignore ST1005 Interaction is a proper noun.
+		return nil, errors.New("Interaction Coordinator is closed")
+	}
+	if c.active {
+		return nil, errors.New("another Interaction is already active")
+	}
+	c.active = true
+	return func() {
+		c.mu.Lock()
+		c.active = false
+		c.mu.Unlock()
+	}, nil
+}
+
+// cleanCurrent returns the current Revision of a Cognition Space without
+// unpublished modifications.
+func (c *Coordinator) cleanCurrent(ctx context.Context) (revision.ID, error) {
+	current, err := c.dependencies.Revisions.Current(ctx)
+	if err != nil {
+		return "", err
+	}
+	dirty, err := c.dependencies.Revisions.HasChanges(ctx)
+	if err != nil {
+		return "", err
+	}
+	if dirty {
+		//lint:ignore ST1005 Cognition Space and Interaction are proper nouns.
+		return "", errors.New("Cognition Space has external unpublished modifications")
+	}
+	return current, nil
 }
 
 type fatalInteractionError struct{ cause error }
@@ -255,7 +280,7 @@ func (c *Coordinator) translateOutput(
 			}
 		}
 		translated, err := c.dependencies.Output.Translate(ctx, translation.OutputRequest{
-			Context: outputContext, Output: output, Revision: current, Mutated: mutated,
+			Context: outputContext, Output: output, Revision: current, Mutated: mutated, Tree: tree,
 		})
 		_ = outputContext.Close()
 		if err != nil {
@@ -308,6 +333,14 @@ func (c *Coordinator) Close() error {
 	}
 	c.closed = true
 	return nil
+}
+
+// drainWarnings returns the agents' warnings since the last call.
+func (c *Coordinator) drainWarnings() []string {
+	if c.dependencies.Warnings == nil {
+		return nil
+	}
+	return c.dependencies.Warnings.Drain()
 }
 
 func (c *Coordinator) storeActivity(ctx context.Context, activity revision.Activity) error {

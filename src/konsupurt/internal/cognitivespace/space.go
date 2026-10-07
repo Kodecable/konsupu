@@ -14,6 +14,10 @@ import (
 	"konsupurt/internal/ripgrep"
 )
 
+// DirectoryMarker is an empty hidden file the Runtime writes into directories
+// it creates so that the Git Revision backend keeps them while empty. It has
+// no meaning to the Cognition Space: like every dot path it is not part of it,
+// and nothing requires it.
 const DirectoryMarker = ".konsupu-directory"
 
 type Role uint8
@@ -157,18 +161,6 @@ func (s *Space) Validate(ctx context.Context) error {
 			//lint:ignore ST1005 Cognition Space is a proper noun.
 			return errors.New("Cognition Space entry name must be valid UTF-8")
 		}
-		relative := relativeSlash(s.root, path)
-		if entry.Name() == DirectoryMarker && filepath.Dir(path) != s.root {
-			info, err := entry.Info()
-			if err != nil {
-				return err
-			}
-			if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() != 0 {
-				//lint:ignore ST1005 Cognition Space is a proper noun.
-				return fmt.Errorf("Cognition Space directory marker is invalid: %s", relative)
-			}
-			return nil
-		}
 		if hiddenName(entry.Name()) {
 			if entry.IsDir() {
 				return filepath.SkipDir
@@ -184,11 +176,6 @@ func (s *Space) Validate(ctx context.Context) error {
 			return fmt.Errorf("Cognition Space symlink is not allowed: %s", relativeSlash(s.root, path))
 		}
 		if info.IsDir() {
-			marker, markerErr := os.Lstat(filepath.Join(path, DirectoryMarker))
-			if markerErr != nil || !marker.Mode().IsRegular() || marker.Mode()&os.ModeSymlink != 0 {
-				//lint:ignore ST1005 Cognition Space is a proper noun.
-				return fmt.Errorf("Cognition Space directory %s has no valid marker", relativeSlash(s.root, path))
-			}
 			if err := validateDirectoryCase(path); err != nil {
 				return err
 			}

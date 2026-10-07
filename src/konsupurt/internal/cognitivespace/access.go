@@ -9,6 +9,12 @@ import (
 	"unicode/utf8"
 )
 
+// PromptDirectory holds the optional prompt modules of the runtime agents
+// (Interface/Prompt/InputTranslate.js, OutputTranslate.js, Learning.js).
+// The Host evaluates them; Translation views and transient modules do not
+// reach them.
+const PromptDirectory = "Interface/Prompt"
+
 type view struct {
 	space    *Space
 	role     Role
@@ -66,7 +72,9 @@ func (v *view) allowed(relative, operation string) bool {
 	}
 	switch v.role {
 	case RoleInputTranslation, RoleOutputTranslation:
-		return relative == "" || top == "Interface"
+		// The Host reads Interface/Prompt for the agents; they do not see it.
+		prompt := relative == PromptDirectory || strings.HasPrefix(relative, PromptDirectory+"/")
+		return relative == "" || (top == "Interface" && !prompt)
 	case RoleResolve:
 		if operation == "list" || operation == "read" || operation == "search" {
 			return true

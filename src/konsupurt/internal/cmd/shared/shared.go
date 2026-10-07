@@ -39,6 +39,16 @@ func ExactArgs(count int) cobra.PositionalArgs {
 	}
 }
 
+func MaximumArgs(count int) cobra.PositionalArgs {
+	validate := cobra.MaximumNArgs(count)
+	return func(command *cobra.Command, args []string) error {
+		if err := validate(command, args); err != nil {
+			return &UsageError{Err: err}
+		}
+		return nil
+	}
+}
+
 func NoArgs(command *cobra.Command, args []string) error {
 	if err := cobra.NoArgs(command, args); err != nil {
 		return &UsageError{Err: err}

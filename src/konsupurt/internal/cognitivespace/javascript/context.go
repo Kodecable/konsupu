@@ -133,6 +133,12 @@ func (c *Context) EvaluateModule(ctx context.Context, source string) (*Value, er
 	if err := validateTransientModule(ctx, source); err != nil {
 		return nil, err
 	}
+	return c.evaluate(ctx, source)
+}
+
+// evaluate runs a transient module the Host wrote itself, so it is not held
+// to the import rules of agent-written modules.
+func (c *Context) evaluate(ctx context.Context, source string) (*Value, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed || c.pointer == nil {

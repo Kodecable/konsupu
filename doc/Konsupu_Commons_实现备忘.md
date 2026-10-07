@@ -10,12 +10,14 @@ Commons 是建立在 Foundation 之上的认知包，源码以 overlay 形式放
 
 ```text
 src/commons/
-├── Interface/Commons.js          公开出口，同时转出 Nodes.js
+├── Interface/Commons.js          公开出口，同时转出 Nodes.js；含 Help
+├── Interface/Nodes.doc.js        Foundation 出口的 Help 文档
 ├── Memory/ValidateInput.js       覆盖 Foundation 默认入口：Commons lint
 ├── Memory/ResolveQuery.js        覆盖 Foundation 默认入口：Commons 求解
 ├── Memory/ResolveQueryDefer.js   同上（主入口总是完成全部变量）
 ├── Memory/Commons/
-│   ├── Vocabulary/               词汇：Base、Links、Logic、Ordinals、Anchors、TimeValues、TimeRelations、Cognition
+│   ├── Vocabulary/               词汇：Base、Links、Logic、Ordinals、Anchors、TimeValues、TimeRelations、Cognition；Write（Assert、Occurred）；各自的 .doc.js
+│   ├── Help/                     Help（Help.js、Describe.js）与 .doc.js 登记表（Docs.js）
 │   ├── Model/                    Schema（字段与规则声明）、Graph、Index（输入索引）、Result（{status, result}）
 │   ├── Lint/                     lint 规则
 │   ├── Engine/                   项、知识库、对应组（Groups）、匹配（Fit、Same）、包含判定（Subsume）、证明、反驳、推导、模式分量、模式实例（Instances）、矛盾诊断（Conflicts）
@@ -45,6 +47,49 @@ Go 集成测试 `src/konsupurt/internal/cognitivespace/javascript/commons_test.g
 - 通过 Runtime 运行根 `Test()`（Foundation 与 Commons 两套自检）；
 - 在 Input Context 构造问题、在 Resolve Context 求解、在 Output Context 读出答案，验证跨 Context 的类型判断与答案（测试专用的祈使入口输出 `status:result`）；
 - 验证 lint 拒绝与“无声明决定的 Query”被归类为输入修复，原因到达 Input Translation。
+
+### 1.1 Help 与 `.doc.js`
+
+翻译 Agent 只能读 `Interface/` 源码，读不到 `Memory/` 中的类与注释。它们通过
+`js_eval` 调用 Help 了解词汇：
+
+```js
+import { Help } from "./Interface/Commons.js";
+export default Help("Only"); // Help() 列出全部出口
+```
+
+**`.doc.js` 约定。** 模块 `X.js` 可以有同目录的 `X.doc.js`，为 `X.js` 的出口写
+文档。它导出两样东西：
+
+- `TITLE`：Help() 总览中的分组名；
+- `DOCS`：以出口名为键，每项是
+  `{ value, summary, signature?, fields?, notes?, spec? }`。
+
+其中 `value` 是出口本身，Help 按名字或对象身份查找它。`Help/Docs.js` 登记所有
+`.doc.js`；一个模块加入公开出口时，也把它的 `.doc.js` 登记到那里。这是 Commons
+的约定，Runtime 不知道它：`.doc.js` 就是普通的 `.js`。
+
+**Help 的内容。** 文档给出含义、各字段的意思、写法提示与条款号。代码本身已经
+说明的部分由 Help 读出，不在文档里重复：
+
+- 构造方式：SituatedNode 子类由 `FIELDS` 生成，必填字段在前，可选字段带 `?`；
+- 继承链；
+- 字段声明：required、pattern、contra、exact、context、kind；
+- 类的标志：开放字段、`TIMELESS`、`DEFINITIONAL`、`CLOSES`、时间修饰、`POINTS`
+  与 `OBJECTS`；
+- 规则钩子：`Judge`、`Order` 等。
+
+没有文档的类（例如 Learning 新增的领域类）只显示这些声明。
+
+**自检。** `Test/Commons/Help.js` 检查四件事：
+
+- `Interface/Commons.js` 的每个出口恰有一项文档，每项文档都对应一个出口；
+- 文档写的字段与 `FIELDS` 完全一致；
+- 不能由 `FIELDS` 生成构造方式的出口都写了 `signature`；
+- 典型输出的文字。
+
+`Assert`、`Occurred` 从 `Interface/Commons.js` 移到 `Vocabulary/Write.js`，由
+`Interface/Commons.js` 转出。这样 `.doc.js` 引用它们时不会与 Help 形成循环导入。
 
 ## 2. 求解组织
 
@@ -137,3 +182,4 @@ Go 集成测试 `src/konsupurt/internal/cognitivespace/javascript/commons_test.g
 | 原则 2、6 | `TestPositionIndependence`（带种子的合法顺序打乱）、`TestCorrespondsFacets`（对应组成员的先后）、`TestUnrelatedCognition`、`TestMonotone`、`TestQueryNeedsDeclaration` |
 | 7.3 计算上限 | `TestDerivationLimit` |
 | 规模 | `TestScale`（30 个已发生事件、约 250 个节点、6 个问题） |
+| Help 与 `.doc.js` | `TestHelpCoversSurface`、`TestHelpEntriesMatchCode`、`TestHelpText` |
