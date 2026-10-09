@@ -253,6 +253,8 @@ func writeEvent(output io.Writer, event base.Event) {
 		_, _ = fmt.Fprintf(output, "space prompt:\n%s\n\n", indent(event.Content))
 	case "context_compressed":
 		_, _ = fmt.Fprintf(output, "[%d] context compressed:\n%s\n\n", event.Iteration, indent(event.Content))
+	case "retry":
+		_, _ = fmt.Fprintf(output, "[%d] model request failed, retry %s:\n%s\n\n", event.Iteration, event.Name, indent(event.Content))
 	case "state":
 		switch base.Phase(event.Name) {
 		case base.PhaseCompressing, base.PhaseExhausted, base.PhaseFailed:

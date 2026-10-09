@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"konsupurt/internal/llmapi"
 )
@@ -18,7 +19,13 @@ const (
 	DefaultCompressionBufferTokens = 20000
 	DefaultPreserveRecentTokens    = 8000
 	MaxToolObservationBytes        = 16 << 10
+	// MaxModelRetries is how many times one agent run (one stage) may resend
+	// a model request after a network failure, over the whole run.
+	MaxModelRetries = 3
 )
+
+// retryDelay is the wait before the n-th retry (1-based); tests replace it.
+var retryDelay = func(n int) time.Duration { return time.Duration(1<<n) * time.Second }
 
 type RequestUsage struct {
 	InputTokens       int
@@ -43,6 +50,7 @@ type session struct {
 	iteration  int
 	toolChoice llmapi.ToolChoice
 	cache      requestCache
+	retries    int
 }
 
 type requestCache struct {
@@ -149,7 +157,7 @@ func (s *session) run(ctx context.Context) (Result, error) {
 		if err = s.transition(PhaseAwaitingModel); err != nil {
 			return s.result, err
 		}
-		response, err := s.runner.Client.Generate(ctx, request)
+		response, err := s.generate(ctx, request)
 		if err != nil {
 			return s.result, err
 		}
@@ -323,6 +331,31 @@ func (s *session) transition(next Phase) error {
 	s.phase = next
 	s.record(Event{Iteration: s.iteration, Kind: "state", Name: string(next)})
 	return nil
+}
+
+// generate sends one model request, resending it after a retryable network
+// failure while the run still has retries left. The budget is shared by every
+// request of the run, so a broken link cannot stall a stage indefinitely.
+func (s *session) generate(ctx context.Context, request llmapi.Request) (llmapi.Response, error) {
+	for {
+		response, err := s.runner.Client.Generate(ctx, request)
+		if err == nil || !llmapi.Retryable(err) || s.retries >= MaxModelRetries || ctx.Err() != nil {
+			return response, err
+		}
+		s.retries++
+		s.record(Event{
+			Iteration: s.iteration, Kind: "retry",
+			Name:    fmt.Sprintf("%d/%d", s.retries, MaxModelRetries),
+			Content: err.Error(), Failed: true,
+		})
+		timer := time.NewTimer(retryDelay(s.retries))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return llmapi.Response{}, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 func (s *session) record(event Event) {

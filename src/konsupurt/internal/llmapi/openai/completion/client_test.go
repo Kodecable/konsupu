@@ -232,7 +232,7 @@ func TestExtraBodyIsMergedAndManagedFieldsAreRejected(t *testing.T) {
 	if string(sent["temperature"]) != "0.2" || string(sent["thinking"]) != `{"type":"enabled"}` || string(sent["model"]) != `"model"` {
 		t.Fatalf("sent=%v", sent)
 	}
-	for _, name := range []string{"model", "messages", "tools", "tool_choice", "max_tokens", "stream"} {
+	for _, name := range []string{"model", "messages", "tools", "tool_choice", "max_tokens", "stream", "stream_options"} {
 		if _, err := New(Options{BaseURL: "https://example.invalid", Body: map[string]json.RawMessage{name: json.RawMessage("1")}}); err == nil {
 			t.Fatalf("managed body field %q was accepted", name)
 		}
@@ -276,5 +276,107 @@ func TestDebugOutputShowsRequestAndResponseHeadersWithoutCredentials(t *testing.
 	}
 	if strings.Contains(text, "sk-secret") || strings.Contains(text, "sk-other") {
 		t.Fatalf("debug output leaks the API key:\n%s", text)
+	}
+}
+
+func TestTransportFailuresAreNetworkErrorsUnlessCanceled(t *testing.T) {
+	broken := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, io.ErrUnexpectedEOF
+	})}
+	client, _ := New(Options{BaseURL: "https://example.invalid", Client: broken})
+	_, err := client.Generate(context.Background(), basicRequest())
+	var apiError *llmapi.Error
+	if !errors.As(err, &apiError) || apiError.Kind != llmapi.ErrorNetwork || !llmapi.Retryable(err) || !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("error=%#v", err)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = client.Generate(canceled, basicRequest())
+	if llmapi.Retryable(err) {
+		t.Fatalf("cancellation must not be retryable: %v", err)
+	}
+}
+
+func eventStreamClient(body string) *http.Client {
+	return responseClient(200, body, http.Header{"Content-Type": []string{"text/event-stream; charset=utf-8"}})
+}
+
+func TestStreamedResponseIsAssembledFromDeltas(t *testing.T) {
+	var sent map[string]json.RawMessage
+	httpClient := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if err := json.NewDecoder(request.Body).Decode(&sent); err != nil {
+			t.Fatal(err)
+		}
+		return httpResponse(200, strings.Join([]string{
+			`: keep-alive`,
+			``,
+			`data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"He"}}]}`,
+			``,
+			`data: {"choices":[{"index":0,"delta":{"reasoning_content":"hmm","content":"llo"}}]}`,
+			``,
+			`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call-2","function":{"name":"second","arguments":"{}"}},{"index":0,"id":"call-1","type":"function","function":{"name":"fin","arguments":"{\"a"}}]}}]}`,
+			``,
+			`data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"name":"ish","arguments":"nswer\":42}"}}]},"finish_reason":"tool_calls"}]}`,
+			``,
+			`data: {"choices":[],"usage":{"prompt_tokens":20,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":4}}}`,
+			``,
+			`data: [DONE]`,
+			``,
+		}, "\r\n"), http.Header{"Content-Type": []string{"text/event-stream"}}), nil
+	})}
+	client, _ := New(Options{BaseURL: "https://example.invalid", Client: httpClient})
+	response, err := client.Generate(context.Background(), basicRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(sent["stream"]) != "true" || string(sent["stream_options"]) != `{"include_usage":true}` {
+		t.Fatalf("stream flags not sent: %v", sent)
+	}
+	calls := response.Message.ToolCalls
+	if response.Message.Content != "Hello" || len(calls) != 2 ||
+		calls[0].ID != "call-1" || calls[0].Name != "finish" || calls[0].Arguments != `{"answer":42}` ||
+		calls[1].ID != "call-2" || calls[1].Name != "second" {
+		t.Fatalf("message=%#v", response.Message)
+	}
+	if response.Usage.InputTokens != 20 || response.Usage.OutputTokens != 5 || response.Usage.CachedInputTokens == nil || *response.Usage.CachedInputTokens != 4 {
+		t.Fatalf("usage=%#v", response.Usage)
+	}
+}
+
+func TestTruncatedStreamIsARetryableNetworkError(t *testing.T) {
+	client, _ := New(Options{BaseURL: "https://example.invalid", Client: eventStreamClient(
+		"data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"par\"}}]}\n\n")})
+	_, err := client.Generate(context.Background(), basicRequest())
+	var apiError *llmapi.Error
+	if !errors.As(err, &apiError) || apiError.Kind != llmapi.ErrorNetwork || !llmapi.Retryable(err) {
+		t.Fatalf("error=%#v", err)
+	}
+}
+
+func TestStreamEndingWithFinishReasonNeedsNoDone(t *testing.T) {
+	client, _ := New(Options{BaseURL: "https://example.invalid", Client: eventStreamClient(
+		"data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}")})
+	response, err := client.Generate(context.Background(), basicRequest())
+	if err != nil || response.Message.Content != "ok" {
+		t.Fatalf("response=%#v err=%v", response, err)
+	}
+}
+
+func TestStreamErrorChunkIsUnavailable(t *testing.T) {
+	client, _ := New(Options{BaseURL: "https://example.invalid", Client: eventStreamClient(
+		"data: {\"error\":{\"message\":\"upstream failed\"}}\n\n")})
+	_, err := client.Generate(context.Background(), basicRequest())
+	var apiError *llmapi.Error
+	if !errors.As(err, &apiError) || apiError.Kind != llmapi.ErrorUnavailable || !strings.Contains(apiError.Message, "upstream failed") {
+		t.Fatalf("error=%#v", err)
+	}
+}
+
+func TestMalformedStreamChunkIsAProtocolError(t *testing.T) {
+	client, _ := New(Options{BaseURL: "https://example.invalid", Client: eventStreamClient("data: {\n\n")})
+	_, err := client.Generate(context.Background(), basicRequest())
+	var apiError *llmapi.Error
+	if !errors.As(err, &apiError) || apiError.Kind != llmapi.ErrorProtocol {
+		t.Fatalf("error=%#v", err)
 	}
 }

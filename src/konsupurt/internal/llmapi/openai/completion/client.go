@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"mime"
 	"net/http"
 	"net/url"
 	"slices"
@@ -110,13 +111,20 @@ func (c *Client) Generate(ctx context.Context, request llmapi.Request) (llmapi.R
 	response, err := c.http.Do(httpRequest)
 	if err != nil {
 		c.debugf("<- transport error: %v\n", err)
-		return llmapi.Response{}, fmt.Errorf("OpenAI completion request: %w", err)
+		return llmapi.Response{}, transportError(ctx, "OpenAI completion request: ", err)
 	}
 	c.debugResponse(response)
 	defer response.Body.Close()
+	if response.StatusCode >= 200 && response.StatusCode < 300 && isEventStream(response) {
+		wireResponse, err := readStream(ctx, response.Body, c.maxResponseBytes)
+		if err != nil {
+			return llmapi.Response{}, err
+		}
+		return decodeResponse(wireResponse)
+	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, c.maxResponseBytes+1))
 	if err != nil {
-		return llmapi.Response{}, fmt.Errorf("read OpenAI completion response: %w", err)
+		return llmapi.Response{}, transportError(ctx, "read OpenAI completion response: ", err)
 	}
 	if int64(len(data)) > c.maxResponseBytes {
 		return llmapi.Response{}, &llmapi.Error{Kind: llmapi.ErrorProtocol, StatusCode: response.StatusCode, Message: fmt.Sprintf("OpenAI completion response exceeds %d bytes", c.maxResponseBytes)}
@@ -139,7 +147,7 @@ func (c *Client) Generate(ctx context.Context, request llmapi.Request) (llmapi.R
 }
 
 // managedFields are owned by the request encoder and cannot come from Options.Body.
-var managedFields = []string{"model", "messages", "tools", "tool_choice", "max_tokens", "stream"}
+var managedFields = []string{"model", "messages", "tools", "tool_choice", "max_tokens", "stream", "stream_options"}
 
 // marshal encodes the request and merges the configured extra fields over it.
 func (c *Client) marshal(request requestBody) ([]byte, error) {
@@ -274,6 +282,23 @@ func truncateBody(body string) string {
 		cut--
 	}
 	return body[:cut] + fmt.Sprintf("...[truncated, %d bytes in total]", len(body))
+}
+
+// isEventStream reports whether the server answered with server-sent events.
+// A provider that ignores the stream flag answers with plain JSON instead.
+func isEventStream(response *http.Response) bool {
+	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	return err == nil && mediaType == "text/event-stream"
+}
+
+// transportError wraps a failure to send the request or to read the whole
+// response. It is a retryable network error unless the caller's own context
+// ended, which is cancellation and stays a plain error.
+func transportError(ctx context.Context, prefix string, err error) error {
+	if ctx.Err() != nil {
+		return fmt.Errorf("%s%w", prefix, err)
+	}
+	return &llmapi.Error{Kind: llmapi.ErrorNetwork, Message: prefix + err.Error(), Err: err}
 }
 
 func decodeHTTPError(response *http.Response, data []byte) error {

@@ -12,6 +12,14 @@ type requestBody struct {
 	Tools      []toolBody    `json:"tools,omitempty"`
 	ToolChoice any           `json:"tool_choice,omitempty"`
 	MaxTokens  int           `json:"max_tokens,omitempty"`
+	// Requests are always streamed: a long generation then keeps the
+	// connection busy instead of idle, which gateways would cut.
+	Stream        bool           `json:"stream"`
+	StreamOptions *streamOptions `json:"stream_options,omitempty"`
+}
+
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type messageBody struct {
@@ -51,7 +59,10 @@ func encodeRequest(input llmapi.Request) (requestBody, error) {
 	if input.MaxOutputTokens <= 0 {
 		return requestBody{}, errors.New("LLM max output tokens must be positive")
 	}
-	output := requestBody{Model: input.Model, MaxTokens: input.MaxOutputTokens}
+	output := requestBody{
+		Model: input.Model, MaxTokens: input.MaxOutputTokens,
+		Stream: true, StreamOptions: &streamOptions{IncludeUsage: true},
+	}
 	for _, message := range input.Messages {
 		wire := messageBody{Role: string(message.Role), Content: message.Content, ToolCallID: message.ToolCallID}
 		for _, call := range message.ToolCalls {
